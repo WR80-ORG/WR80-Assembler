@@ -9,6 +9,7 @@
 #include "wr80asm.h"
 
 int main(int argc, char *argv[]) {
+
 	if (argc == 1) {
 		const char* description = FILE_DESCRIPTION;
 		const char* author = COMPANY_NAME;
@@ -75,6 +76,7 @@ int main(int argc, char *argv[]) {
 	
 	unsigned char* machinecode = NULL;
 	bool mounted = (mount) ? assemble_file(source, &machinecode, verb) : false;
+	//bool mounted = assemble_file("getchar_ex.asm", &machinecode, false);
 	
 	if(mounted && hexdump)
 		hex_dump(machinecode);

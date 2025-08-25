@@ -62,10 +62,6 @@ void error(const char* msg){
 }
 // -----------------------------------------------------------------------------
 
-//  FUNCTION PROTOTYPES
-void hex_dump(unsigned char* code);
-int replace_name(char* name);
-// -----------------------------------------------------------------------------
 
 // FUNCTIONS TO FORMAT LINE AND OPERANDS
 // -----------------------------------------------------------------------------
@@ -211,6 +207,9 @@ void proc_define(){
 	int pos = 1;
 	char* name = NULL;
 	char* value = NULL;
+	
+	//debug
+	//puts("Caiu no proc define");
 	
 	while(token != NULL){
 		token = strtok(NULL, " ");
@@ -1047,6 +1046,9 @@ bool preprocess_file(const char *filename, bool verbose){
 	    label_list = begin_lab();
 		listInitialized = true;	
 	}
+	
+	//debug
+	//puts("Passou da Initializacao de listas!");
     
     while (fgets(line, sizeof(line), file)){
     	int x = 0;
@@ -1064,7 +1066,7 @@ bool preprocess_file(const char *filename, bool verbose){
     	if(line[i] == 0x0D){
 			continue;	
 		}
-		if(line[i] == NULL){
+		if(line[i] == '/0'){
 			break;
 		}
     	int length = strcspn(&line[i], ":");
@@ -1092,14 +1094,23 @@ bool preprocess_file(const char *filename, bool verbose){
 						return false;
 				}
 				break;	
-			}else if(directive_error)
+			}else{
+				//debug
+				//puts("Reconheceu diretiva DEFINE");
+				if(directive_error)
 					return false;
+			} 
 					
 			token = strtok(NULL, " ");
 		}
 
+		//debug
+		//printf("Preprocessou linha %d do arquivo %s\n", linenum, filename);
 		linenum++;
 	}
+	
+	//debug
+	//puts("Passou do while que ler linhas!");
 
 	fclose(file);
 	return true;
@@ -1118,7 +1129,9 @@ bool assemble_file(const char *filename, unsigned char **compiled, bool verbose)
 		isValid = preprocess_file(filename, verbose);
 		if(!isValid) return false;	
 	}
-
+	
+	//debug
+	//printf("Retornou de preprocess_file, arquivo = %s\n", filename);
 	if(memory == NULL){
 		memory = (unsigned char *) malloc(MEMORY_EMULATOR * sizeof(unsigned char));
 		if (memory == NULL) {
@@ -1138,6 +1151,9 @@ bool assemble_file(const char *filename, unsigned char **compiled, bool verbose)
         exit(EXIT_FAILURE);
     }
 
+	//debug
+	//printf("Abriu arquivo %s\n", filename);
+	
     while (fgets(line, sizeof(line), file)) {
     	if(verbose) printf("Assembly line: %s", line);
     	int x = 0;
