@@ -166,7 +166,7 @@ void proc_dcb(){
 			if(isHexa) i = i + 1;
 			if(isHexa2) i = i + 1;
 			
-			while(token[i] != ',' && token[i] != NULL)
+			while(token[i] != ',' && token[i] != NULL && token[i] != ' ')
 				val[j++] = token[i++];
 			val[j] = 0;
 			if(token[i-1] == '\'')
@@ -1052,6 +1052,9 @@ bool preprocess_file(const char *filename, bool verbose){
     
     while (fgets(line, sizeof(line), file)){
     	int x = 0;
+    	if(line[x] == '/0'){
+			break;
+		}
     	for(; line[x] == 0x20 || line[x] == 0x09; x++);
     	if(strcmp(&line[x], "\n") == 0){
     		linenum++;
@@ -1062,13 +1065,6 @@ bool preprocess_file(const char *filename, bool verbose){
     	if(verbose) printf("Preprocessor Line: %s\n", line);
     	
     	int i = 0;
-    	for(; line[i] == ' '; i++);
-    	if(line[i] == 0x0D){
-			continue;	
-		}
-		if(line[i] == '/0'){
-			break;
-		}
     	int length = strcspn(&line[i], ":");
 		token = strtok(line, " ");
 		
@@ -1077,32 +1073,35 @@ bool preprocess_file(const char *filename, bool verbose){
 			continue;
 		}
 		
-		while (token != NULL) {
-	    	isLineComment = token[0] == ';' || isLineComment;
-	    	if(isLineComment){
-	    		token = strtok(NULL, " ");
-	    		continue;
-			}
-			
-			directive_error = false;
-			isDirective = false;
-			isMnemonic = false;
-			if(get_directive() == -1){
-				if(get_mnemonic() == -1){
-					label = token;
-					if(!get_label(length))
-						return false;
-				}
-				break;	
-			}else{
-				//debug
-				//puts("Reconheceu diretiva DEFINE");
-				if(directive_error)
-					return false;
-			} 
-					
-			token = strtok(NULL, " ");
+		bool isAlloc = strcmp(token, "DB") == 0 || strcmp(token, "DW") == 0 || strcmp(token, "DCB") == 0 || strcmp(token, ".BYTE") == 0;
+		if(isAlloc){
+			linenum++;
+			continue;	
 		}
+		
+	    isLineComment = token[0] == ';' || isLineComment;
+	    if(isLineComment){
+	    	linenum++;
+	    	continue;
+		}
+			
+		directive_error = false;
+		isDirective = false;
+		isMnemonic = false;
+		if(get_directive() == -1){
+			if(get_mnemonic() == -1){
+				label = token;
+				if(!get_label(length))
+					return false;
+			}	
+		}else{
+			//debug
+			//puts("Reconheceu diretiva DEFINE");
+			if(directive_error)
+				return false;
+		} 
+			
+		token = NULL;
 
 		//debug
 		//printf("Preprocessou linha %d do arquivo %s\n", linenum, filename);
@@ -1240,11 +1239,15 @@ bool preprocess_buffer(const char *buffer, bool verbose){
 		}
     	int length = strcspn(&line[i], ":");
 		token = strtok(line, " ");
-		
+			
 		if(token == NULL || token[0] == ';') {
 			linenum++;
 			continue;
 		}
+		
+		bool isAlloc = strcmp(token, "DB") == 0 || strcmp(token, "DW") == 0 || strcmp(token, "DCB") == 0 || strcmp(token, ".BYTE") == 0;
+		if(isAlloc)
+			continue;
 		
 		while (token != NULL) {
 	    	isLineComment = token[0] == ';' || isLineComment;
@@ -1265,7 +1268,8 @@ bool preprocess_buffer(const char *buffer, bool verbose){
 				break;	
 			}else if(directive_error)
 					return false;
-					
+			
+			printf("token3: '%s'\n", token);		
 			token = strtok(NULL, " ");
 		}
 
