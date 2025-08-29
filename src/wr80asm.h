@@ -117,19 +117,19 @@ void proc_dcb(){
 	
 	int i = 0;
 	int length = 0;
-	unsigned char* value = malloc(strlen(token) + 1);
+	char* value = malloc(1); //malloc(strlen(token) + 1);
 	bool isHexa = false;
 	bool isHexa2 = false;
 	bool isNum = false;
 	bool isLowByte = false;
 	bool isHighByte = false;
 	bool isBitIsolate = false;
-	while(token[i] != '\0'){
+	while(token[i] != NULL){
 		if(token[i] == '"'){
 			i++;
-			while(token[i] != '"' && token[i] != '\0'){
+			while(token[i] != '"' && token[i] != NULL){
 				//char num = token[i];
-				//value = realloc(value, length+1);
+				value = realloc(value, length+1);
 				value[length++] = token[i++];
 			}
 			if(token[i] == '"') i++;
@@ -178,7 +178,7 @@ void proc_dcb(){
 			if(((j > 2 && isHexa) || (num > 255 && !isHexa)) && !isBitIsolate && !isDW)
 				printwarn("DCB byte is larger than 8-bit. Only low byte will be considered");
 		
-			//value = realloc(value, length+1);
+			value = realloc(value, length+1);
 			
 			if(isDW){
 				value[length++] = (num & 0xFF);
@@ -1197,7 +1197,6 @@ bool assemble_file(const char *filename, unsigned char **compiled, bool verbose)
     fclose(file);
 	
 	*compiled = code_address;
-	if(verbose) printf("Chegou fora do while!\n");
 	
 	return isValid;
 }
@@ -1268,8 +1267,7 @@ bool preprocess_buffer(const char *buffer, bool verbose){
 				break;	
 			}else if(directive_error)
 					return false;
-			
-			printf("token3: '%s'\n", token);		
+					
 			token = strtok(NULL, " ");
 		}
 
