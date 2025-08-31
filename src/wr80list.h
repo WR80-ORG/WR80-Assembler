@@ -76,7 +76,7 @@ DefineList* insertdef(DefineList* list, int line, char name[], char value[], cha
 		new_node->refs[0] = '\0';
 	}else{
 		strcpy(new_node->refs, refs);
-		new_node->value[0] = *value;
+		new_node->value[0] = '\0';
 	}
 	
 	new_node->line = line;
