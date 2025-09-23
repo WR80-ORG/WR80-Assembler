@@ -33,6 +33,7 @@ struct node_refs {
 	bool relative;
 	bool isDcb;
 	bool isHigh;
+	bool is8bit;
 	bool isDW;
 	int bitshift;
 	struct node_refs * next;
@@ -112,6 +113,7 @@ RefsAddr* insertaddr(RefsAddr* list, int addr, bool relative, bool isdcb, bool i
 	new_node->relative = relative;
 	new_node->isDcb = isdcb;
 	new_node->isHigh = isHigh;
+	new_node->is8bit = false;
 	new_node->isDW = isDW;
 	new_node->next = list;
 	return new_node;
@@ -163,24 +165,28 @@ LabelList* getLabelByName(LabelList *list, char name[]){
 }
 
 // calculate the referenced label before
-void setref(RefsAddr *list, char *code_addr, int addr){
+void setref(RefsAddr *list, char *code_addr, int addr, int org_num){
 	for(RefsAddr *li = list; li != NULL; li = li->next){
 		int op_index = li->addr;
 		if(li->relative){
-			int PC = op_index;
+			int PC = op_index + org_num;
 			int rel_addr_high = (addr - (PC + 2) & 0xF00) >> 8;
 			int rel_addr_low = (addr - (PC + 2)) & 0xFF;
 			code_addr[op_index] |= rel_addr_high;
 			code_addr[op_index+1] = rel_addr_low;
 		}else{
 			if(li->isDcb){
-				code_addr[li->addr] = (li->isHigh) ? (addr & 0xF00) >> 8 : (addr & 0xFF);
+				code_addr[op_index] = (li->isHigh) ? (addr & 0xF00) >> 8 : (addr & 0xFF);
 				if(li->isDW)
-					code_addr[li->addr + 1] = (addr & 0xF00) >> 8;
+					code_addr[op_index + 1] = (addr & 0xF00) >> 8;
 			}else{
 				if(li->isHigh){
 					int bits = li->bitshift;
-					code_addr[op_index] = (code_addr[op_index] & 0xF0) + ((addr & (0xF << bits)) >> bits);
+					if(li->is8bit){
+						code_addr[op_index+1] = ((addr & (0xFF << bits)) >> bits);
+					}else{
+						code_addr[op_index] = (code_addr[op_index] & 0xF0) + ((addr & (0xF << bits)) >> bits);	
+					}
 				}else{
 					code_addr[op_index] = (addr & 0xFF);
 					code_addr[op_index+1] = (addr & 0xF00) >> 8;
