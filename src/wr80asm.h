@@ -1069,6 +1069,7 @@ bool preprocess_file(char *filename, bool verbose){
 	    define_list = begin_def();
 	    dcb_list = begin_dcb();
 	    label_list = begin_lab();
+	    macro_list = begin_mac();
 		listInitialized = true;	
 	}
 	
@@ -1239,6 +1240,7 @@ bool preprocess_buffer(const char *buffer, bool verbose){
 	    define_list = begin_def();
 	    dcb_list = begin_dcb();
 	    label_list = begin_lab();
+	    macro_list = begin_mac();
 		listInitialized = true;	
 	}
     
@@ -1410,6 +1412,8 @@ void close_lists(){
 		freedcb(dcb_list);
 	if(label_list != NULL)
 		freelab(label_list);
+	if(macro_list != NULL)
+		freemac(macro_list);
 }
 // -----------------------------------------------------------------------------
 

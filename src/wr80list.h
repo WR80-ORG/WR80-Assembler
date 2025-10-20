@@ -50,7 +50,17 @@ struct node_lab {
 };
 typedef struct node_lab LabelList;
 
+struct node_mac {
+	int pcount;
+	char name[256];
+	char** pnames;
+	char** pvalues;
+	char* content;
+	struct node_mac * next;
+};
+typedef struct node_mac MacroList;
 
+MacroList* getMacroByName(MacroList*, char[]);
 // DAT/TAD: Data Abstract Type Begin
 // -----------------------------------------------------------------
 // Initialize the define list
@@ -65,6 +75,10 @@ DcbList* begin_dcb(){
 
 // Initialize the label list
 LabelList* begin_lab(){
+	return NULL;
+}
+
+MacroList* begin_mac(){
 	return NULL;
 }
 
@@ -119,6 +133,45 @@ RefsAddr* insertaddr(RefsAddr* list, int addr, bool relative, bool isdcb, bool i
 	return new_node;
 }
 
+MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char* code){
+	MacroList *new_node = (MacroList*) malloc(sizeof(MacroList));
+	strcpy(new_node->name, name);
+	new_node->pcount = argc;
+	new_node->pnames = (params != NULL) ? malloc(argc * sizeof(char*)) : NULL;
+	if(new_node->pnames != NULL){
+		for(int i = 0; i < argc; i++){
+			new_node->pnames[i] = malloc(strlen(params[i]) * sizeof(char));
+			strcpy(new_node->pnames[i], params[i]);
+			free(params[i]);
+		}
+		free(params);
+	}
+	new_node->pvalues = NULL;
+	new_node->content = (code != NULL) ? malloc(strlen(code) * sizeof(char)) : NULL;
+	if(new_node->content != NULL){
+		strcpy(new_node->content, code);
+	}
+	new_node->next = list;
+	return new_node;
+}
+
+MacroList* insertargs(MacroList *list, char name[], char** args){
+	MacroList* macro = getMacroByName(list, name);
+	if(macro != NULL){
+		int argc = macro->pcount;
+		macro->pvalues = (argc != 0) ? malloc(argc * sizeof(char*)) : NULL;
+		if(macro->pvalues != NULL){
+			for(int i = 0; i < argc; i++){
+				macro->pvalues[i] = malloc(strlen(args[i]) * sizeof(char));
+				strcpy(macro->pvalues[i], args[i]);
+				free(args[i]);
+			}
+			free(args);
+		}
+	}
+	return macro;
+}
+
 // search a definition by name
 DefineList* search(DefineList *list, char* name){
 	for(DefineList *li = list; li != NULL; li = li->next)
@@ -158,6 +211,15 @@ LabelList* getLabelByLine(LabelList *list, int line){
 // get a label by name
 LabelList* getLabelByName(LabelList *list, char name[]){
 	for(LabelList *li = list; li != NULL; li = li->next)
+		if(strcmp(li->name, name) == 0)
+			return li;
+			
+	return NULL;
+}
+
+// get a label by name
+MacroList* getMacroByName(MacroList *list, char name[]){
+	for(MacroList *li = list; li != NULL; li = li->next)
 		if(strcmp(li->name, name) == 0)
 			return li;
 			
@@ -273,6 +335,21 @@ void freeref(RefsAddr *list){
 	
 	while(aux != NULL){
 		RefsAddr *next_node = aux->next;
+		free(aux);
+		aux = next_node;
+	}
+}
+
+// free the define list
+void freemac(MacroList *list){
+	MacroList *aux = list;
+	
+	while(aux != NULL){
+		MacroList *next_node = aux->next;
+		if(aux->pnames != NULL)
+			free(aux->pnames);
+		free(aux->pvalues);
+		free(aux->content);
 		free(aux);
 		aux = next_node;
 	}

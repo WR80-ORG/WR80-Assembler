@@ -119,6 +119,7 @@ DefineList *define_list;
 DcbList *dcb_list;
 LabelList *label_list;
 RefsAddr* curr_refer = NULL;
+MacroList *macro_list;
 // -----------------------------------------------------
 
 // -----------------------------------------------------
