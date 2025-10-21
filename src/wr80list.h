@@ -51,6 +51,7 @@ struct node_lab {
 typedef struct node_lab LabelList;
 
 struct node_mac {
+	int line;
 	int pcount;
 	char name[256];
 	char** pnames;
@@ -133,10 +134,11 @@ RefsAddr* insertaddr(RefsAddr* list, int addr, bool relative, bool isdcb, bool i
 	return new_node;
 }
 
-MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char* code){
+MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char* code, int line){
 	MacroList *new_node = (MacroList*) malloc(sizeof(MacroList));
 	strcpy(new_node->name, name);
 	new_node->pcount = argc;
+	new_node->line = line;
 	new_node->pnames = (params != NULL) ? malloc(argc * sizeof(char*)) : NULL;
 	if(new_node->pnames != NULL){
 		for(int i = 0; i < argc; i++){

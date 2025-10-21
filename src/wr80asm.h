@@ -265,6 +265,16 @@ void proc_define(){
 				printf("Error: This label '%s' at line %d is already defined at line %d.", lab->name, linenum, lab->line);
 			directive_error = true;
 			return;
+		}else{
+			MacroList* macro = getMacroByName(macro_list, name);
+			if(macro != NULL){
+				if(!isBuffer)
+					printf("%s -> Error: This name '%s' at line %d is already defined at line %d.", currentfile, macro->name, linenum, macro->line);
+				else
+					printf("Error: This name '%s' at line %d is already defined at line %d.", macro->name, linenum, macro->line);
+				directive_error = true;
+				return;
+			}
 		}
 	}
 		
@@ -336,6 +346,113 @@ void proc_include(){
 		fprintf(stderr, "Error: error in assemble the included file: %s\n", file_name);
 		directive_error = true;
 	}
+}
+// -----------------------------------------------------------------------------
+
+// proc_macro: Store Macros in lists for replacement
+// -----------------------------------------------------------------------------
+void proc_macro(){
+	int pos = 1;
+	char* name = NULL;
+	char* params = NULL;
+	char* code = NULL;
+	int linen = linenum;
+	int argc = 0;
+	
+	while(token != NULL){
+		token = strtok(NULL, " ");
+		if(token == NULL) break;
+		switch(pos){
+			case 1:	name = token;
+					break;
+			case 2: {
+				params = token;
+				argc = strtol(params, &endptr, 10);
+				if (*endptr != '\0') {
+					argc = 1;
+					// TODO: Identificar parâmetros nomeados
+					params = NULL;
+				}else{
+					params = NULL;
+				}
+				token = NULL;
+				break;
+			}
+			default: if(token != NULL){
+						printerr("Invalid defined token");
+						directive_error = true;
+					 }
+		}
+		if(directive_error)
+			return;
+			
+		pos++;
+	}
+	
+	bool isNum = name[0] > 0x30 && name[0] <= 0x39;
+	bool isSymbol = false;
+	for(int i = 0; i < strlen(name); i++)
+		isSymbol = name[i] == '#' || name[i] == '$' || name[i] == ':' || name[i] == '%' || isSymbol;
+	if(params != NULL)
+		for(int i = 0; i < strlen(params); i++)
+			isSymbol = params[i] == '#' || params[i] == '$' || params[i] == ':' || params[i] == '%' || isSymbol;
+		
+	if(isNum || isSymbol){
+		printerr("Invalid declared macro");
+		directive_error = true;
+		return;
+	}
+	
+	MacroList* macro = getMacroByName(macro_list, name);
+	if(macro != NULL){
+		if(!isBuffer)
+			printf("%s -> Error: This name '%s' at line %d is already defined at line %d.", currentfile, macro->name, linenum, macro->line);
+		else
+			printf("Error: This name '%s' at line %d is already defined at line %d.", macro->name, linenum, macro->line);
+		directive_error = true;
+		return;
+	}else{
+		LabelList* lab = getLabelByName(label_list, name);
+		if(lab != NULL){
+			if(!isBuffer)
+				printf("%s -> Error: This label '%s' at line %d is already defined at line %d.", currentfile, lab->name, linenum, lab->line);
+			else
+				printf("Error: This label '%s' at line %d is already defined at line %d.", lab->name, linenum, lab->line);
+			directive_error = true;
+			return;
+		}else{
+			DefineList* def = getdef(define_list, name);
+			if(def != NULL){
+				if(!isBuffer)
+					printf("%s -> Error: This name '%s' at line %d is already defined at line %d.", currentfile, def->name, linenum, def->line);
+				else
+					printf("Error: This name '%s' at line %d is already defined at line %d.", def->name, linenum, def->line);
+				directive_error = true;
+				return;
+			}
+		}
+	}
+	
+	// TODO: Alocar o buffer 'code'
+	linenum++;
+	printf("Info: argc = %d, name = %s, line = %d\n", argc, name, linen);
+	printf("CONTENT: \n");
+	while (fgets(line, sizeof(line), fileopened)) {
+		printf("%s", line);
+		token = strtok(line, "\n");
+		token = strtok(token, " ");
+		token = strtok(token, "\t");
+		token = strtok(token, ";");
+		if(strcmp(token, "endm") != 0){
+			// TODO: Armazenar cada linha em 'code'
+		}else{
+			printf("End Macro!\n");
+			break;
+		}
+		linenum++;
+	}
+	
+	macro_list = insertmac(macro_list, argc, name, (char**)params, code, linen);
 }
 // -----------------------------------------------------------------------------
 
@@ -1064,6 +1181,7 @@ bool preprocess_file(char *filename, bool verbose){
     linenum = 1;
     isBuffer = false;
     currentfile = filename;
+    fileopened = file;
     
     if(!listInitialized){
 	    define_list = begin_def();
@@ -1175,7 +1293,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
         perror("Error in opening the file");
         exit(EXIT_FAILURE);
     }
-
+	
 	//debug
 	//printf("Abriu arquivo %s\n", filename);
 	

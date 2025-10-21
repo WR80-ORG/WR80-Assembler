@@ -29,6 +29,7 @@ void proc_define(void);
 void proc_dcb(void);
 void proc_org(void);
 void proc_include(void);
+void proc_macro(void);
 void (*func_ptr)();
 
 void printerr(const char*);
@@ -66,6 +67,7 @@ char *operand;
 char *label;
 char *endptr;
 char *currentfile;
+FILE *fileopened;
 
 char line[MAX_LINE_LENGTH];
 char dest[50];
@@ -255,17 +257,18 @@ const unsigned short addressing[] = {
 
 // Preprocessor basic directives
 // -----------------------------------------------------
-#define DIRECTIVES_SIZE 	2
+#define DIRECTIVES_SIZE 	3
 const char* directives[] = {
 	"DEFINE",
-	"INCLUDE"
+	"INCLUDE",
+	"MACRO"
 };
 // -----------------------------------------------------
 
 // Preprocessor Execution vector for directives
 // -----------------------------------------------------
 int* process[] = {
-	(int*)proc_define, (int*)proc_include
+	(int*)proc_define, (int*)proc_include, (int*)proc_macro
 };
 
 // -----------------------------------------------------
