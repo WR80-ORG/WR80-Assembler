@@ -355,6 +355,7 @@ void proc_macro(){
 	int pos = 1;
 	char* name = NULL;
 	char* params = NULL;
+	char** pnames = NULL;
 	char* code = NULL;
 	int linen = linenum;
 	int argc = 0;
@@ -363,17 +364,43 @@ void proc_macro(){
 		token = strtok(NULL, " ");
 		if(token == NULL) break;
 		switch(pos){
-			case 1:	name = token;
-					break;
+			case 1:{
+				int len = strlen(token);
+				name = malloc(len + 1);
+				strcpy(name, token);
+				name[len] = '\0';
+				break;
+			}	
 			case 2: {
-				params = token;
-				argc = strtol(params, &endptr, 10);
+				argc = strtol(token, &endptr, 10);
 				if (*endptr != '\0') {
-					argc = 1;
+					argc = 0;
 					// TODO: Identificar parâmetros nomeados
-					params = NULL;
+					int total = 0;
+					int len = strlen(token);
+					while(token != NULL){
+						int new_size = total + len + 1;
+						params = realloc(params, new_size);
+						params[total] = '\0';
+						strcat(params, token);
+    					total = strlen(params);
+						token = strtok(NULL, " ");
+					}
+					len = strlen(params);
+    				if(len > 0 && params[len-1] == '\n') 
+						params[len-1] = '\0';
+    				char *ptoken = strtok(params, ",");
+    				while(ptoken != NULL) {
+						char *param = ptoken;
+        				char **tmp = realloc(pnames, (argc + 1) * sizeof(char*));
+        				pnames = tmp;
+        				pnames[argc] = malloc(strlen(param) + 1);
+        				strcpy(pnames[argc], param);
+        				argc++;
+        				ptoken = strtok(NULL, ",");
+					}
 				}else{
-					params = NULL;
+					pnames = NULL;
 				}
 				token = NULL;
 				break;
@@ -403,7 +430,7 @@ void proc_macro(){
 		return;
 	}
 	
-	MacroList* macro = getMacroByName(macro_list, name);
+	MacroList* macro = getMacroByNameA(macro_list, name, argc);
 	if(macro != NULL){
 		if(!isBuffer)
 			printf("%s -> Error: This name '%s' at line %d is already defined at line %d.", currentfile, macro->name, linenum, macro->line);
@@ -435,24 +462,35 @@ void proc_macro(){
 	
 	// TODO: Alocar o buffer 'code'
 	linenum++;
-	printf("Info: argc = %d, name = %s, line = %d\n", argc, name, linen);
-	printf("CONTENT: \n");
+	int total_size = 0;
 	while (fgets(line, sizeof(line), fileopened)) {
-		printf("%s", line);
+		char line_tmp[strlen(line) + 1];
+		strcpy(line_tmp, line);
+		int len = strlen(line);
 		token = strtok(line, "\n");
 		token = strtok(token, " ");
 		token = strtok(token, "\t");
 		token = strtok(token, ";");
 		if(strcmp(token, "endm") != 0){
-			// TODO: Armazenar cada linha em 'code'
+			int new_size = total_size + len + 1 + 1;
+			code = realloc(code, new_size);
+			if (total_size == 0) code[0] = '\0';
+		    if (line_tmp[len - 1] == '\n') {
+		        line_tmp[len - 1] = '\r'; // troca \n por \r
+		        line_tmp[len] = '\n';     // coloca \n depois
+		        line_tmp[len + 1] = '\0'; // encerra string
+		    }
+			strcat(code, line_tmp);
+    		total_size = strlen(code);
 		}else{
-			printf("End Macro!\n");
 			break;
 		}
 		linenum++;
 	}
 	
-	macro_list = insertmac(macro_list, argc, name, (char**)params, code, linen);
+	macro_list = insertmac(macro_list, argc, name, pnames, code, linen);
+	free(name);
+	free(code);
 }
 // -----------------------------------------------------------------------------
 
@@ -1272,6 +1310,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		isValid = preprocess_file(filename, verbose);
 		if(!isValid) return false;	
 	}
+	showmac(macro_list);
 	
 	//debug
 	//printf("Retornou de preprocess_file, arquivo = %s\n", filename);

@@ -53,6 +53,7 @@ typedef struct node_lab LabelList;
 struct node_mac {
 	int line;
 	int pcount;
+	char id[256];
 	char name[256];
 	char** pnames;
 	char** pvalues;
@@ -62,6 +63,7 @@ struct node_mac {
 typedef struct node_mac MacroList;
 
 MacroList* getMacroByName(MacroList*, char[]);
+MacroList* getMacroByNameA(MacroList*, char[], int);
 // DAT/TAD: Data Abstract Type Begin
 // -----------------------------------------------------------------
 // Initialize the define list
@@ -136,6 +138,7 @@ RefsAddr* insertaddr(RefsAddr* list, int addr, bool relative, bool isdcb, bool i
 
 MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char* code, int line){
 	MacroList *new_node = (MacroList*) malloc(sizeof(MacroList));
+	snprintf(new_node->id, sizeof(new_node->id), "%s_%d", name, argc);
 	strcpy(new_node->name, name);
 	new_node->pcount = argc;
 	new_node->line = line;
@@ -157,8 +160,8 @@ MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char
 	return new_node;
 }
 
-MacroList* insertargs(MacroList *list, char name[], char** args){
-	MacroList* macro = getMacroByName(list, name);
+MacroList* insertargs(MacroList *list, char name[], int argc, char** args){
+	MacroList* macro = getMacroByNameA(list, name, argc);
 	if(macro != NULL){
 		int argc = macro->pcount;
 		macro->pvalues = (argc != 0) ? malloc(argc * sizeof(char*)) : NULL;
@@ -219,10 +222,19 @@ LabelList* getLabelByName(LabelList *list, char name[]){
 	return NULL;
 }
 
-// get a label by name
+// get a Macro by name
 MacroList* getMacroByName(MacroList *list, char name[]){
 	for(MacroList *li = list; li != NULL; li = li->next)
 		if(strcmp(li->name, name) == 0)
+			return li;
+			
+	return NULL;
+}
+
+// get a Macro by name and argc
+MacroList* getMacroByNameA(MacroList *list, char name[], int argc){
+	for(MacroList *li = list; li != NULL; li = li->next)
+		if(strcmp(li->name, name) == 0 && li->pcount == argc)
 			return li;
 			
 	return NULL;
@@ -295,6 +307,19 @@ void showlab(LabelList *list){
 void showrefs(RefsAddr *list){
 	for(RefsAddr *li = list; li != NULL; li = li->next)
 		printf("addr = 0x%X, isHigh = %d, shift = %d\n", li->addr, li->isHigh, li->bitshift);
+}
+
+// show each node the label list
+void showmac(MacroList *list){
+	for(MacroList *li = list; li != NULL; li = li->next){
+		printf(" line = %d\n ID = %s\n name = %s\n pcount = %d\n", li->line, li->id, li->name, li->pcount);
+		if(li->content != NULL)
+			printf("%s", li->content);
+		if(li->pnames != NULL)
+			for(size_t i = 0; i < li->pcount; i++)
+				printf(" pnames[%zu] = '%s'\n", i, li->pnames[i]);
+		printf("\n");
+	}
 }
 
 // free the define list
