@@ -164,6 +164,12 @@ MacroList* insertargs(MacroList *list, char name[], int argc, char** args){
 	MacroList* macro = getMacroByNameA(list, name, argc);
 	if(macro != NULL){
 		int argc = macro->pcount;
+		if(macro->pvalues != NULL){
+			for(int i = 0; i < argc; i++)
+				free(macro->pvalues[i]);
+			free(macro->pvalues);
+			macro->pvalues = NULL;
+		}
 		macro->pvalues = (argc != 0) ? malloc(argc * sizeof(char*)) : NULL;
 		if(macro->pvalues != NULL){
 			for(int i = 0; i < argc; i++){
@@ -313,11 +319,14 @@ void showrefs(RefsAddr *list){
 void showmac(MacroList *list){
 	for(MacroList *li = list; li != NULL; li = li->next){
 		printf(" line = %d\n ID = %s\n name = %s\n pcount = %d\n", li->line, li->id, li->name, li->pcount);
-		if(li->content != NULL)
-			printf("%s", li->content);
 		if(li->pnames != NULL)
 			for(size_t i = 0; i < li->pcount; i++)
 				printf(" pnames[%zu] = '%s'\n", i, li->pnames[i]);
+		if(li->pvalues != NULL)
+			for(size_t i = 0; i < li->pcount; i++)
+				printf(" pvalues[%zu] = '%s'\n", i, li->pvalues[i]);
+		if(li->content != NULL)
+			printf("%s", li->content);
 		printf("\n");
 	}
 }

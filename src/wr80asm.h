@@ -318,6 +318,7 @@ void proc_include(){
 	bool mounted = false;
 	if(!isInclude){
 		if(isBuffer){
+			linebegin = 1;
 			char *source_code = load_file_to_buffer(file_name);
 			mounted = preprocess_buffer(source_code, isVerbose);
 			free(source_code);
@@ -327,6 +328,7 @@ void proc_include(){
 	}else{
 		unsigned char* machinecode = NULL;
 		if(isBuffer){
+			linebegin = 1;
 			char *source_code = load_file_to_buffer(file_name);
 			mounted = assemble_buffer(source_code, &machinecode, isVerbose);
 			free(source_code);
@@ -420,9 +422,12 @@ void proc_macro(){
 	bool isSymbol = false;
 	for(int i = 0; i < strlen(name); i++)
 		isSymbol = name[i] == '#' || name[i] == '$' || name[i] == ':' || name[i] == '%' || isSymbol;
-	if(params != NULL)
+	if(params != NULL){
 		for(int i = 0; i < strlen(params); i++)
-			isSymbol = params[i] == '#' || params[i] == '$' || params[i] == ':' || params[i] == '%' || isSymbol;
+			isSymbol = params[i] == '#' || params[i] == '$' || params[i] == ':' || params[i] == '%' || isSymbol;	
+		free(params);
+		params = NULL;
+	}
 		
 	if(isNum || isSymbol){
 		printerr("Invalid declared macro");
@@ -678,7 +683,8 @@ int get_mnemonic(){
 // get_label: read label and store in list on preprocessor
 // -----------------------------------------------------------------------------
 bool get_label(int length){
-	while(token != NULL){
+	MacroList* macro = getMacroByName(macro_list, label);
+	while(token != NULL && macro == NULL){
 		int pos = strcspn(&label[0], ":");
 		if(label[pos] == ':'){
 			token = strtok(NULL, " ");
@@ -740,7 +746,7 @@ bool get_label(int length){
 			}else{
 				printerr("Invalid label name - missing ':'");
 				return false;
-			}
+			}	
 		}	
 	}
 	return true;
@@ -765,11 +771,68 @@ bool calc_label(unsigned char *label){
 		toIgnore = true;
 		return toIgnore;
 	}else{
-		printerr("Unknown mnemonic");
-		return false;
+		MacroList* macro = getMacroByName(macro_list, label);
+		if(macro == NULL){
+			printerr("Unknown mnemonic");
+			return false;
+		}else{
+			token = strtok(NULL, " ");
+			int argc = 0;
+			int total = 0;
+			int len = 0;
+			char* args = NULL;
+			char** pvalues = NULL;
+			if(token != NULL){
+				len = strlen(token);
+				while(token != NULL){
+					int new_size = total + len + 1;
+					args = realloc(args, new_size);
+					args[total] = '\0';
+					strcat(args, token);
+	    			total = strlen(args);
+					token = strtok(NULL, " ");
+				}
+				
+				len = strlen(args);
+	    		if(len > 0 && args[len-1] == '\n') 
+					args[len-1] = '\0';
+	    		char *ptoken = strtok(args, ",");
+	    		while(ptoken != NULL) {
+					char *param = ptoken;
+	        		char **tmp = realloc(pvalues, (argc + 1) * sizeof(char*));
+	        		pvalues = tmp;
+	        		pvalues[argc] = malloc(strlen(param) + 1);
+	        		strcpy(pvalues[argc], param);
+	        		argc++;
+	        		ptoken = strtok(NULL, ",");
+				}	
+			}
+			MacroList* macroArg = insertargs(macro_list, macro->name, argc, pvalues);
+			if(macroArg != NULL){
+				//showmac(macro_list);
+				isMacro = true;
+				isMacroScope = isMacro;
+				macrocode = macroArg->content;
+				return true;
+			}else{
+				printf("%s -> Error at line %d: Macro %s with %d args not found!\n", currentfile, linenum, macro->name, argc);
+				return false;
+			}
+		}
 	}
 }
 // -----------------------------------------------------------------------------
+
+bool assemble_macro(){
+	
+	linebegin = 1;
+	int linetemp = linenum;
+	unsigned char* machinecode;
+	bool assembled = assemble_buffer(macrocode, &machinecode, false);
+	linenum = linetemp;
+	
+	return assembled;
+}
 
 // **********************************************************************************
 
@@ -863,7 +926,18 @@ bool tokenizer(){
 			mnemonic = token;
 			
 			
-			toIgnore = strcmp(token, "DEFINE") == 0;
+			toIgnore = strcmp(token, "DEFINE") == 0 || strcmp(token, "MACRO") == 0;
+			
+			if(strcmp(token, "MACRO") == 0){
+				while (strcmp(token, "endm") != 0) {
+					fgets(line, sizeof(line), fileopened);
+					token = strtok(line, "\n");
+					token = strtok(token, " ");
+					token = strtok(token, "\t");
+					token = strtok(token, ";");
+					linenum++;
+				}	
+			}
 			
 			if(toIgnore)
 				return true;
@@ -1036,6 +1110,12 @@ bool generator(){
 	if(isInclude){
 		proc_include();
 		return !directive_error;
+	}
+	if(isMacro){
+		isMacro = !isMacro;
+		bool isAssembled = assemble_macro();
+		isMacroScope = isMacro;
+		return isAssembled;
 	}
 		
 	
@@ -1310,7 +1390,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		isValid = preprocess_file(filename, verbose);
 		if(!isValid) return false;	
 	}
-	showmac(macro_list);
+	//showmac(macro_list);
 	
 	//debug
 	//printf("Retornou de preprocess_file, arquivo = %s\n", filename);
@@ -1333,6 +1413,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
         exit(EXIT_FAILURE);
     }
 	
+	fileopened = file;
 	//debug
 	//printf("Abriu arquivo %s\n", filename);
 	
@@ -1391,7 +1472,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 bool preprocess_buffer(const char *buffer, bool verbose){
 	isVerbose = verbose;
     const char *bufptr = buffer;
-    int linenum = 1;
+    int linenum = linebegin;
     
     if(!listInitialized){
 	    define_list = begin_def();
@@ -1484,7 +1565,7 @@ bool assemble_buffer(const char *buffer, unsigned char **compiled, bool verbose)
 	}
 	
 	const char *bufptr = buffer;
-    int linenum = 1;
+    int linenum = linebegin;
     
     while (buffer_fgets(line, sizeof(line), &bufptr)) {
     	isBuffer = true;

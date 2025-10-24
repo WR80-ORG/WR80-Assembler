@@ -67,6 +67,7 @@ char *operand;
 char *label;
 char *endptr;
 char *currentfile;
+char *macrocode;
 FILE *fileopened;
 
 char line[MAX_LINE_LENGTH];
@@ -76,6 +77,7 @@ char dest[50];
 // Integer values
 // -----------------------------------------------------
 int linenum = 1;
+int linebegin = 1;
 int number;
 int len;
 int bit_shift;
@@ -101,6 +103,8 @@ bool isInclude = false;
 bool isHigh = false;
 bool isDecimal = false;
 bool isReferenced = false;
+bool isMacro = false;
+bool isMacroScope = false;
 bool toIgnore = false;
 bool isLineComment = false;
 bool directive_error = false;
