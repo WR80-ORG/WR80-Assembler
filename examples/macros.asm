@@ -1,10 +1,17 @@
-; parâmetro nomeado
 macro _mov num1, num2
-	st 4
-	st 5
-	st 6
+	stl #2
+	ld #1
+	ld #num2 ; Era num3
 endm
 
-_mov a, b
-_mov c, d
+; R0:DR = 0xFF02
+macro _mov 1
+	std #1::8
+	ld r0
+	std #1::0
+endm
+
+
+_mov $FF02
+_mov r1, r0
  

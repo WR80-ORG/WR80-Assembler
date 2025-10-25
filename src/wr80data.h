@@ -67,7 +67,7 @@ char *operand;
 char *label;
 char *endptr;
 char *currentfile;
-char *macrocode;
+MacroList *currmacro;
 FILE *fileopened;
 
 char line[MAX_LINE_LENGTH];

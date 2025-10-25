@@ -606,11 +606,19 @@ int replace_name(char* name){
 }
 // -----------------------------------------------------------------------------
 
+int getParamIndex(const char* param){
+	if(currmacro->pnames == NULL) return -1;
+	for(int i = 0; i < currmacro->pcount; i++)
+		if(strcmp(currmacro->pnames[i], param) == 0)
+			return i;
+	return -1;
+}
 // check_definition: Verify if the operand has defined name and replace it
 // -----------------------------------------------------------------------------
 int check_definition(){
 	int index = 0;
-	if(token[index] == '$') 
+	bool isMacroArg = token[index] == '#';
+	if(token[index] == '$')
 		index += 1;
 	else if((token[index] == '0' && token[index+1] == 'X') || (token[index] == 'H' && token[index+1] == '\''))
 		index += 2;
@@ -623,21 +631,36 @@ int check_definition(){
 		namelen -= 1;
 	}
 
-	if(name[0] >= 0x30 && name[0] <= 0x39)
-		return 0;
+	if(!isMacroArg)
+		if(name[0] >= 0x30 && name[0] <= 0x39)
+			return 0;
 		
 	name[namelen] = 0;
-	strtol(&name[0], &endptr, 10);
+	int i = (isMacroArg) ? 1 : 0;
+	int arg = strtol(&name[i], &endptr, 10);
 	
 	if(*endptr != '\0'){
-		strtol(&name[0], &endptr, 16);
-		bool possibleHexaError = (!index && (token[index] != '$' 
-								&& (token[index] != '0' && token[index+1] != 'X') 
-								&& (token[index] != 'H' && token[index+1] != '\'')));
-		if(*endptr != '\0' || possibleHexaError){
-			return replace_name(name);
+		if(!isMacroArg){
+			strtol(&name[0], &endptr, 16);
+			bool possibleHexaError = (!index && (token[index] != '$' 
+									&& (token[index] != '0' && token[index+1] != 'X') 
+									&& (token[index] != 'H' && token[index+1] != '\'')));
+			if(*endptr != '\0' || possibleHexaError){
+				return replace_name(name);
+			}	
+		}else{
+			int param = getParamIndex(&name[1]);
+			if(param == -1){
+				printf("%s -> Error at line %d: Param '%s' does not exist!\n", currentfile, linenum, &name[1]);
+				return param;
+			}
+			token = replace(token, name, currmacro->pvalues[param]);
+			return 1;
 		}
-			
+	}else if(isMacroArg){
+		if(arg < 1) arg = 1;
+		token = replace(token, name, currmacro->pvalues[arg-1]);
+		return 1;
 	}
 
 	return 0;
@@ -812,7 +835,7 @@ bool calc_label(unsigned char *label){
 				//showmac(macro_list);
 				isMacro = true;
 				isMacroScope = isMacro;
-				macrocode = macroArg->content;
+				currmacro = macroArg;
 				return true;
 			}else{
 				printf("%s -> Error at line %d: Macro %s with %d args not found!\n", currentfile, linenum, macro->name, argc);
@@ -825,11 +848,15 @@ bool calc_label(unsigned char *label){
 
 bool assemble_macro(){
 	
-	linebegin = 1;
-	int linetemp = linenum;
+	linebegin = currmacro->line + 1;
+	int linetmp = linenum;
+	MacroList *macrotmp = currmacro;
+	
 	unsigned char* machinecode;
-	bool assembled = assemble_buffer(macrocode, &machinecode, false);
-	linenum = linetemp;
+	bool assembled = assemble_buffer(macrotmp->content, &machinecode, false);
+	
+	currmacro = macrotmp;
+	linenum = linetmp;
 	
 	return assembled;
 }
@@ -839,6 +866,15 @@ bool assemble_macro(){
 // FUNCTIONS TO RUN EACH STEP OF THE ASSEMBLER
 // **********************************************************************************
 
+int check_register(bool is_gas_syntax){
+	for(int i = 0; i < 16; i++){
+		if(strcmp(user_registers[i], token) == 0 || strcmp(port_registers[i], token) == 0){
+			reg_index = (is_gas_syntax) ? i - 8 : i;
+			return reg_index;
+		}
+	}
+	return -1;
+}
 // tokenizer: it's the lexycal analyzer step getting each token
 // -----------------------------------------------------------------------------
 bool tokenizer(){
@@ -882,22 +918,13 @@ bool tokenizer(){
 		}
 		
 		syntax_GAS = token[0] == '%';
-		bool isNotRegister = false;
-		reg_index = -1;
-		for(int i = 0; i < 16; i++){
-			if(strcmp(user_registers[i], token) == 0 || strcmp(port_registers[i], token) == 0){
-				reg_index = (syntax_GAS) ? i - 8 : i;
-				isNotRegister = true;
-				break;
-			}
-		}
+		reg_index = check_register(syntax_GAS);
 		
-		if(count_tok > 0 && !isNotRegister && token[0] != '"'){
+		if(count_tok > 0 && reg_index == -1 && token[0] != '"'){
 			isDefinition = check_definition();
 			if(isDefinition == -1)
 				return false;
 		}
-		
 		
 		syntax_6502 = token[0] == '$';
 		syntax_PIC = (token[0] == 'H' && token[1] == '\'');
@@ -906,6 +933,7 @@ bool tokenizer(){
 		isDecimal = (token[0] >= 0x30 && token[0] <= 0x39) && token[1] != 'X';
 		isHexadecimal = syntax_6502 || syntax_PIC || syntax_Intel;
 		
+		reg_index = check_register(syntax_GAS);
 		
 		if(isHexadecimal || syntax_GAS || isDecimal || reg_index != -1){
 			if(!isMnemonic){
@@ -924,7 +952,6 @@ bool tokenizer(){
 			}
 			isMnemonic = true;
 			mnemonic = token;
-			
 			
 			toIgnore = strcmp(token, "DEFINE") == 0 || strcmp(token, "MACRO") == 0;
 			
@@ -1472,7 +1499,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 bool preprocess_buffer(const char *buffer, bool verbose){
 	isVerbose = verbose;
     const char *bufptr = buffer;
-    int linenum = linebegin;
+    linenum = linebegin;
     
     if(!listInitialized){
 	    define_list = begin_def();
@@ -1565,7 +1592,7 @@ bool assemble_buffer(const char *buffer, unsigned char **compiled, bool verbose)
 	}
 	
 	const char *bufptr = buffer;
-    int linenum = linebegin;
+    linenum = linebegin;
     
     while (buffer_fgets(line, sizeof(line), &bufptr)) {
     	isBuffer = true;
