@@ -613,6 +613,17 @@ int getParamIndex(const char* param){
 			return i;
 	return -1;
 }
+
+int check_register(bool is_gas_syntax){
+	for(int i = 0; i < 16; i++){
+		if(strcmp(user_registers[i], token) == 0 || strcmp(port_registers[i], token) == 0){
+			reg_index = (is_gas_syntax) ? i - 8 : i;
+			return reg_index;
+		}
+	}
+	return -1;
+}
+
 // check_definition: Verify if the operand has defined name and replace it
 // -----------------------------------------------------------------------------
 int check_definition(){
@@ -655,12 +666,14 @@ int check_definition(){
 				return param;
 			}
 			token = replace(token, name, currmacro->pvalues[param]);
-			return 1;
+			int reg_index = check_register(token[0] == '%');
+			return (reg_index == -1) ? check_definition() : 1;
 		}
 	}else if(isMacroArg){
 		if(arg < 1) arg = 1;
 		token = replace(token, name, currmacro->pvalues[arg-1]);
-		return 1;
+		int reg_index = check_register(token[0] == '%');
+		return (reg_index == -1) ? check_definition() : 1;
 	}
 
 	return 0;
@@ -866,15 +879,6 @@ bool assemble_macro(){
 // FUNCTIONS TO RUN EACH STEP OF THE ASSEMBLER
 // **********************************************************************************
 
-int check_register(bool is_gas_syntax){
-	for(int i = 0; i < 16; i++){
-		if(strcmp(user_registers[i], token) == 0 || strcmp(port_registers[i], token) == 0){
-			reg_index = (is_gas_syntax) ? i - 8 : i;
-			return reg_index;
-		}
-	}
-	return -1;
-}
 // tokenizer: it's the lexycal analyzer step getting each token
 // -----------------------------------------------------------------------------
 bool tokenizer(){
@@ -924,6 +928,11 @@ bool tokenizer(){
 			isDefinition = check_definition();
 			if(isDefinition == -1)
 				return false;
+			//if(isMacroScope){
+			//	isDefinition = check_definition();
+			//	if(isDefinition == -1)
+			//		return false;
+			//}
 		}
 		
 		syntax_6502 = token[0] == '$';
