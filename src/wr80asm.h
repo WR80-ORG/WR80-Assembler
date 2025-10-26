@@ -92,6 +92,19 @@ void format_operand(){
 }
 // -----------------------------------------------------------------------------
 
+void free_vector(char** vector, int size){
+    if (vector == NULL) return;
+
+    for (int i = 0; i < size; i++) {
+        if (vector[i] != NULL) {
+            free(vector[i]);
+            vector[i] = NULL;
+        }
+    }
+    free(vector);
+    vector = NULL;
+}
+
 // FUNCTIONS TO PROCESS DIRECTIVES IN PREPROCESSOR
 // **********************************************************************************
 
@@ -363,10 +376,10 @@ void proc_macro(){
 	int argc = 0;
 	
 	while(token != NULL){
-		token = strtok(NULL, " ");
-		if(token == NULL) break;
 		switch(pos){
 			case 1:{
+				token = strtok(NULL, " ");
+				if(token == NULL) break;
 				int len = strlen(token);
 				name = malloc(len + 1);
 				strcpy(name, token);
@@ -377,6 +390,7 @@ void proc_macro(){
 				argc = strtol(token, &endptr, 10);
 				if (*endptr != '\0') {
 					argc = 0;
+					/*
 					// TODO: Identificar parâmetros nomeados
 					int total = 0;
 					int len = strlen(token);
@@ -401,6 +415,13 @@ void proc_macro(){
         				argc++;
         				ptoken = strtok(NULL, ",");
 					}
+					*/
+					pnames = parse_parameters(&argc); // LEAK: Fluxo
+					
+					printf("argc = %d\n", argc);
+				    for (int i = 0; i < argc; i++)
+				        printf("pnames[%d] = '%s'\n", i, pnames[i]);
+		        
 				}else{
 					pnames = NULL;
 				}
@@ -493,9 +514,17 @@ void proc_macro(){
 		linenum++;
 	}
 	
-	macro_list = insertmac(macro_list, argc, name, pnames, code, linen);
-	free(name);
-	free(code);
+	macro_list = insertmac(macro_list, argc, name, pnames, code, linen);	// LEAK: Fluxo
+	if(name != NULL) free(name);
+	if(code != NULL) free(code);
+	//free_vector(pnames, argc);
+	/*
+	if(pnames != NULL){
+		for (int i = 0; argc; i++)
+			free(pnames[i]);
+		free(pnames);
+	}
+	*/
 }
 // -----------------------------------------------------------------------------
 
@@ -539,25 +568,62 @@ bool recursive_def(char* value){
 
 // replace: Replace old_substr to new_substr in token
 // -----------------------------------------------------------------------------
+/*
 char* replace(char* token, const char* old_substr, const char* new_substr){
 	char* pos = strstr(token, old_substr);
 	if(pos != NULL){
 		int old_len = strlen(old_substr);
 		int new_len = strlen(new_substr);
 		int buf_len = strlen(token) + (new_len - old_len);
-		char* buffer = (char*) malloc(buf_len);
+		char* buffer = (char*) malloc(buf_len);	// LEAK: Raiz
 		int prefix_len = pos - token;
 		strncpy(buffer, token, prefix_len);
 		buffer[prefix_len] = '\0';
 		
-		strcat(buffer, new_substr);
-		strcat(buffer, pos + old_len);
-		buffer[buf_len] = '\0';
+		strcat(buffer, new_substr);		// UNADDRESSABLE ACCESS: Raiz (Vindo de check_definition em macros)
+		strcat(buffer, pos + old_len);	// UNADDRESSABLE ACCESS: Raiz (Vindo de check_definition em macros)
+		buffer[buf_len] = '\0';	// UNADDRESSABLE ACCESS: Raiz (Vindo de check_definition em macros)
 		
 		return buffer;
 	}
 	return token;
 }
+*/
+
+char* replace(const char* token, const char* old_substr, const char* new_substr) {
+    static char* buffer = NULL;
+    static size_t buffer_capacity = 0;
+
+    char* pos = strstr(token, old_substr);
+    if (!pos) return (char*)token;
+
+    int old_len = strlen(old_substr);
+    int new_len = strlen(new_substr);
+    int original_len = strlen(token);
+
+    int new_size = original_len + (new_len - old_len) + 1; // +1 para '\0'
+
+    // Realocar APENAS se o buffer for pequeno
+    if (buffer_capacity < new_size) {
+        free(buffer); // evita vazamento
+        buffer = (char*)malloc(new_size);
+        if (!buffer) {
+            buffer_capacity = 0;
+            return (char*)token;
+        }
+        buffer_capacity = new_size;
+    }
+
+    int prefix_len = pos - token;
+
+    memcpy(buffer, token, prefix_len);
+    memcpy(buffer + prefix_len, new_substr, new_len);
+    strcpy(buffer + prefix_len + new_len, pos + old_len);
+    buffer[new_size - 1] = '\0';
+
+    return buffer;
+}
+
 // -----------------------------------------------------------------------------
 
 // replace_name: replace de defined name to the value
@@ -666,14 +732,18 @@ int check_definition(){
 				return param;
 			}
 			token = replace(token, name, currmacro->pvalues[param]);
-			int reg_index = check_register(token[0] == '%');
-			return (reg_index == -1) ? check_definition() : 1;
+			int reg_ind = check_register(token[0] == '%');
+			//return (reg_index == -1) ? check_definition() : 1;
+			if(reg_ind == -1) check_definition();
+			return 1;
 		}
 	}else if(isMacroArg){
 		if(arg < 1) arg = 1;
-		token = replace(token, name, currmacro->pvalues[arg-1]);
-		int reg_index = check_register(token[0] == '%');
-		return (reg_index == -1) ? check_definition() : 1;
+		token = replace(token, name, currmacro->pvalues[arg-1]);	// LEAK: Fluxo
+		int reg_ind = check_register(token[0] == '%'); // UNADDRESSABLE ACCESS: Fluxo
+		//return (reg_index == -1) ? check_definition() : 1;
+		if(reg_ind == -1) check_definition();
+		return 1;
 	}
 
 	return 0;
@@ -691,7 +761,7 @@ int get_directive(){
 	for(int i = 0; i < DIRECTIVES_SIZE; i++){
 		if(strcmp(directives[i], token) == 0){
 			func_ptr = (void(*)())process[i];
-			func_ptr();
+			func_ptr();	// LEAK: Fluxo (proc_macro)
 			return i;	
 		}	
 	}
@@ -789,11 +859,55 @@ bool get_label(int length){
 }
 // -----------------------------------------------------------------------------
 
+char** parse_parameters(int *argc_out) {
+    char **pvalues = NULL;
+    *argc_out = 0; // zera o contador que será retornado
+
+    // Continua a partir de onde strtok parou (após _mov)
+    char *token = strtok(NULL, ",");
+
+    while (token != NULL) {
+        // Remove espaços no início
+        while (*token == ' ' || *token == '\t') token++;
+
+        // Remove espaços e \n no final
+        size_t len = strlen(token);
+        while (len > 0 && (token[len - 1] == ' ' || token[len - 1] == '\n' || token[len - 1] == '\r'))
+            token[--len] = '\0';
+
+        // Realoca mais espaço no vetor de ponteiros
+        char **temp = realloc(pvalues, (*argc_out + 1) * sizeof(char*));	// LEAK: Raiz
+        if (temp == NULL) {
+            // Libera caso dê erro
+            for (int i = 0; i < *argc_out; i++) free(pvalues[i]);
+            free(pvalues);
+            return NULL;
+        }
+        pvalues = temp;
+
+        // Copia a string do token
+        pvalues[*argc_out] = malloc(len + 1);
+        if (pvalues[*argc_out] == NULL) {
+            for (int i = 0; i < *argc_out; i++) free(pvalues[i]);
+            free(pvalues);
+            return NULL;
+        }
+        strcpy(pvalues[*argc_out], token);
+        (*argc_out)++;
+
+        // Próximo token separado por vírgula
+        token = strtok(NULL, ",");
+    }
+
+    return pvalues;
+}
+
+
+
 // calc_label: calculate the label address on assembler
 // -----------------------------------------------------------------------------
 bool calc_label(unsigned char *label){
 	LabelList* list = getLabelByName(label_list, label);
-	
 	
 	if(list != NULL){
 		list->addr = code_index + org_num;
@@ -812,6 +926,7 @@ bool calc_label(unsigned char *label){
 			printerr("Unknown mnemonic");
 			return false;
 		}else{
+			/*
 			token = strtok(NULL, " ");
 			int argc = 0;
 			int total = 0;
@@ -819,8 +934,9 @@ bool calc_label(unsigned char *label){
 			char* args = NULL;
 			char** pvalues = NULL;
 			if(token != NULL){
-				len = strlen(token);
+				args = malloc(1), args[0] = '\0';
 				while(token != NULL){
+					len = strlen(token);
 					int new_size = total + len + 1;
 					args = realloc(args, new_size);
 					args[total] = '\0';
@@ -829,21 +945,42 @@ bool calc_label(unsigned char *label){
 					token = strtok(NULL, " ");
 				}
 				
-				len = strlen(args);
+				if(args != NULL) len = strlen(args);
 	    		if(len > 0 && args[len-1] == '\n') 
 					args[len-1] = '\0';
 	    		char *ptoken = strtok(args, ",");
 	    		while(ptoken != NULL) {
 					char *param = ptoken;
-	        		char **tmp = realloc(pvalues, (argc + 1) * sizeof(char*));
-	        		pvalues = tmp;
+	        		//char **tmp = realloc(pvalues, (argc + 1) * sizeof(char*));
+	        		//pvalues = tmp;
+	        		pvalues = realloc(pvalues, (argc + 1) * sizeof(char*));
 	        		pvalues[argc] = malloc(strlen(param) + 1);
 	        		strcpy(pvalues[argc], param);
 	        		argc++;
 	        		ptoken = strtok(NULL, ",");
 				}	
 			}
-			MacroList* macroArg = insertargs(macro_list, macro->name, argc, pvalues);
+			*/
+			int argc = 0;
+			// Agora extrai os parâmetros restantes
+		    char **pvalues = parse_parameters(&argc); // LEAK: Fluxo
+		
+		    // Exibe
+		   	printf("argc = %d\n", argc);
+		    for (int i = 0; i < argc; i++)
+		        printf("pvalues[%d] = '%s'\n", i, pvalues[i]);
+
+			MacroList* macroArg = insertargs(macro_list, macro->name, argc, pvalues); // LEAK: Fluxo
+			
+			// Libera memória
+			/*
+		    if(pvalues != NULL){
+		    	for (int i = 0; argc; i++)
+		        	free(pvalues[i]);
+		    	free(pvalues);
+			}
+			*/
+		    
 			if(macroArg != NULL){
 				//showmac(macro_list);
 				isMacro = true;
@@ -866,7 +1003,7 @@ bool assemble_macro(){
 	MacroList *macrotmp = currmacro;
 	
 	unsigned char* machinecode;
-	bool assembled = assemble_buffer(macrotmp->content, &machinecode, false);
+	bool assembled = assemble_buffer(macrotmp->content, &machinecode, false);	// LEAK: Fluxo
 	
 	currmacro = macrotmp;
 	linenum = linetmp;
@@ -925,14 +1062,9 @@ bool tokenizer(){
 		reg_index = check_register(syntax_GAS);
 		
 		if(count_tok > 0 && reg_index == -1 && token[0] != '"'){
-			isDefinition = check_definition();
+			isDefinition = check_definition();	// LEAK: Fluxo
 			if(isDefinition == -1)
 				return false;
-			//if(isMacroScope){
-			//	isDefinition = check_definition();
-			//	if(isDefinition == -1)
-			//		return false;
-			//}
 		}
 		
 		syntax_6502 = token[0] == '$';
@@ -981,7 +1113,7 @@ bool tokenizer(){
 			mnemonic_index = get_mnemonic();
 			if(mnemonic_index == -1){
 				token[strcspn(&token[0], ":")] = 0;
-				return calc_label(token);
+				return calc_label(token); // LEAK: Fluxo
 			}
 		
 			isOrg = mnemonic_index == 54;
@@ -1018,7 +1150,7 @@ bool parser(){
 			return false;
 		}
 		
-		if(!parse_addressing(((isHexadecimal) ? 2 : 1))) return false;
+		if(!parse_addressing(((isHexadecimal) ? 2 : 1))) return false; // UNADDRESSABLE ACCESS: Fluxo
 	}else{
 		if(addressing[mnemonic_index]){
 			printerr("Instruction expect 1 operand. Given 0");
@@ -1033,7 +1165,7 @@ bool parser(){
 // -----------------------------------------------------------------------------
 bool parse_addressing(int index){
 		char op[50] = {0};
-		int operand_len = strlen(operand);
+		int operand_len = strlen(operand);	// UNADDRESSABLE ACCESS: Raiz
 		
 		bool isBitGetter = false;
 		int count = 0;
@@ -1149,7 +1281,7 @@ bool generator(){
 	}
 	if(isMacro){
 		isMacro = !isMacro;
-		bool isAssembled = assemble_macro();
+		bool isAssembled = assemble_macro(); // LEAK: Fluxo
 		isMacroScope = isMacro;
 		return isAssembled;
 	}
@@ -1386,7 +1518,7 @@ bool preprocess_file(char *filename, bool verbose){
 		directive_error = false;
 		isDirective = false;
 		isMnemonic = false;
-		if(get_directive() == -1){
+		if(get_directive() == -1){	// LEAK: Fluxo
 			if(get_mnemonic() == -1){
 				label = token;
 				if(!get_label(length))
@@ -1423,7 +1555,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 	isVerbose = verbose;
 	bool isValid = false;
 	if(!isInclude){
-		isValid = preprocess_file(filename, verbose);
+		isValid = preprocess_file(filename, verbose);	// lEAK: Fluxo
 		if(!isValid) return false;	
 	}
 	//showmac(macro_list);
@@ -1463,7 +1595,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		}
 		
         // Lexycal Analyze and tokenization
-		isValid = tokenizer();
+		isValid = tokenizer();  // LEAK: Fluxo
         if(!isValid)
         	break;
         if(toIgnore){
@@ -1477,14 +1609,14 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
         	break;
         
 		// Semantic Analyze and generation
-		isValid = generator();
+		isValid = generator();	// LEAK: Fluxo
 		if(!isValid)
         	break;
 		
 		// Free temporary allocation
-		if(isDefinition) 
-			free(token);
-			
+		//if(isDefinition) 
+		//	free(token);
+		
         linenum++;
     }
 
@@ -1631,9 +1763,10 @@ bool assemble_buffer(const char *buffer, unsigned char **compiled, bool verbose)
         	break;
 		
 		// Free temporary allocation
-		if(isDefinition) 
-			free(token);
+		//if(isDefinition) 
+		//	free(token);
         
+        isDefinition = 0;
         linenum++;
     }
 

@@ -35,9 +35,10 @@ void (*func_ptr)();
 void printerr(const char*);
 void printwarn(const char*);
 bool recursive_def(char*);
-char* replace(char*, const char*, const char*);
+char* replace(const char*, const char*, const char*);
 void hex_dump(unsigned char* code);
 int replace_name(char* name);
+char** parse_parameters(int *);
 // -----------------------------------------------------------------------------
 
 #define MAX_LINE_LENGTH 1024		// MAX LENGTH OF THE LINES

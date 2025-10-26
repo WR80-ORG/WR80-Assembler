@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 	*/
 	
 	unsigned char* machinecode = NULL;
-	bool mounted = (mount) ? assemble_file(source, &machinecode, verb) : false;
+	bool mounted = (mount) ? assemble_file(source, &machinecode, verb) : false;	// LEAK: Fluxo
 	//source = "getchar_ex.asm";
 	//bool mounted = assemble_file(source, &machinecode, true);
 	

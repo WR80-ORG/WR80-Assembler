@@ -142,17 +142,21 @@ MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char
 	strcpy(new_node->name, name);
 	new_node->pcount = argc;
 	new_node->line = line;
+	new_node->pvalues = (argc > 0) ? malloc(argc * sizeof(char*)) : NULL;
+	for(int i = 0; i < argc; i++)
+		new_node->pvalues[i] = NULL;
 	new_node->pnames = (params != NULL) ? malloc(argc * sizeof(char*)) : NULL;
 	if(new_node->pnames != NULL){
 		for(int i = 0; i < argc; i++){
-			new_node->pnames[i] = malloc(strlen(params[i]) * sizeof(char));
+			new_node->pnames[i] = malloc(strlen(params[i]) + 1);	// LEAK: Raiz
 			strcpy(new_node->pnames[i], params[i]);
-			free(params[i]);
+			//free(params[i]);
+			//params[i] = NULL;
 		}
-		free(params);
+		//free(params);
+		//params = NULL;
 	}
-	new_node->pvalues = NULL;
-	new_node->content = (code != NULL) ? malloc(strlen(code) * sizeof(char)) : NULL;
+	new_node->content = (code != NULL) ? malloc(strlen(code) + 1 * sizeof(char)) : NULL;
 	if(new_node->content != NULL){
 		strcpy(new_node->content, code);
 	}
@@ -162,26 +166,97 @@ MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char
 
 MacroList* insertargs(MacroList *list, char name[], int argc, char** args){
 	MacroList* macro = getMacroByNameA(list, name, argc);
+	printf("PCOUNT = %d\n", macro->pcount);
 	if(macro != NULL){
-		int argc = macro->pcount;
-		if(macro->pvalues != NULL){
-			for(int i = 0; i < argc; i++)
-				free(macro->pvalues[i]);
-			free(macro->pvalues);
-			macro->pvalues = NULL;
-		}
-		macro->pvalues = (argc != 0) ? malloc(argc * sizeof(char*)) : NULL;
 		if(macro->pvalues != NULL){
 			for(int i = 0; i < argc; i++){
-				macro->pvalues[i] = malloc(strlen(args[i]) * sizeof(char));
+				macro->pvalues[i] = malloc(strlen(args[i]) + 1);	// LEAK: Raiz
 				strcpy(macro->pvalues[i], args[i]);
-				free(args[i]);
+				//free(args[i]);
+				//args[i] = NULL;
 			}
-			free(args);
+			//free(args);
+			//args = NULL;
 		}
 	}
 	return macro;
 }
+
+
+/*
+
+// Aloca e copia string
+char* strdup_safe(const char* s) {
+    if (!s) return NULL;
+    char* p = malloc(strlen(s) + 1);
+    if (p) strcpy(p, s);
+    return p;
+}
+
+// Copia um array de strings
+char** copy_string_array(char** src, int count) {
+    if (!src || count == 0) return NULL;
+    char** dst = malloc(count * sizeof(char*));
+    for (int i = 0; i < count; i++) {
+        dst[i] = strdup_safe(src[i]);
+    }
+    return dst;
+}
+
+MacroList* insertmac(MacroList* list, int argc, char name[], char** params, char* code, int line) {
+    MacroList *new_node = malloc(sizeof(MacroList));
+    if (!new_node) return NULL;
+
+    // ID: name + argc
+    snprintf(new_node->id, sizeof(new_node->id), "%s_%d", name, argc);
+    strcpy(new_node->name, name);
+    new_node->pcount = argc;
+    new_node->line = line;
+
+    // pnames e pvalues
+    new_node->pnames = copy_string_array(params, argc);
+    new_node->pvalues = calloc(argc, sizeof(char*)); // inicializa NULL
+
+    // Conteúdo da macro
+    new_node->content = strdup_safe(code);
+
+    // Encadeamento
+    new_node->next = list;
+
+    // Limpa os arrays auxiliares fornecidos
+    if (params) {
+        for (int i = 0; i < argc; i++) free(params[i]);
+        free(params);
+    }
+
+    return new_node;
+}
+
+MacroList* insertargs(MacroList *list, char name[], int argc, char** args) {
+    MacroList* macro = getMacroByNameA(list, name, argc);
+    if (!macro || !args) return macro;
+
+    int param_count = macro->pcount;
+
+    // Inicializa pvalues se ainda não estiver alocado
+    if (!macro->pvalues && param_count > 0) {
+        macro->pvalues = calloc(param_count, sizeof(char*));
+    }
+
+    // Copia os valores
+    for (int i = 0; i < param_count; i++) {
+        if (macro->pvalues[i]) free(macro->pvalues[i]);
+        macro->pvalues[i] = strdup_safe(args[i]);
+        free(args[i]);
+        args[i] = NULL;
+    }
+
+    free(args);
+    args = NULL;
+
+    return macro;
+}
+*/
 
 // search a definition by name
 DefineList* search(DefineList *list, char* name){
