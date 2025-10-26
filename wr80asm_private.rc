@@ -8,8 +8,8 @@
 // TO CHANGE VERSION INFORMATION, EDIT PROJECT OPTIONS...
 //
 1 VERSIONINFO
-FILEVERSION 1,1,5,687
-PRODUCTVERSION 1,1,5,687
+FILEVERSION 1,1,6,688
+PRODUCTVERSION 1,1,6,688
 FILETYPE VFT_APP
 {
   BLOCK "StringFileInfo"
@@ -17,14 +17,14 @@ FILETYPE VFT_APP
     BLOCK "040904E4"
     {
       VALUE "CompanyName", "Wenderson Anjos (KiddieOS.Community)"
-      VALUE "FileVersion", "1.1.5.687"
+      VALUE "FileVersion", "1.1.6.688"
       VALUE "FileDescription", "WR80 Assembler for Windows CLI"
       VALUE "InternalName", ""
       VALUE "LegalCopyright", ""
       VALUE "LegalTrademarks", ""
       VALUE "OriginalFilename", ""
       VALUE "ProductName", ""
-      VALUE "ProductVersion", "1.1.5.687"
+      VALUE "ProductVersion", "1.1.6.688"
     }
   }
   BLOCK "VarFileInfo"
