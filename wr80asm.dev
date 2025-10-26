@@ -13,7 +13,7 @@ Compiler=
 CppCompiler=
 Linker=
 IsCpp=0
-Icon=wr80asm.ico
+Icon=
 ExeOutput=bin
 ObjectOutput=obj
 LogOutput=
@@ -29,24 +29,24 @@ IncludeVersionInfo=1
 SupportXPThemes=0
 CompilerSet=0
 CompilerSettings=0000000000000000001000000
-UnitCount=5
+UnitCount=6
 
 [VersionInfo]
 Major=1
 Minor=1
-Release=2
-Build=497
+Release=5
+Build=681
 LanguageID=1033
 CharsetID=1252
 CompanyName=Wenderson Anjos (KiddieOS.Community)
-FileVersion=1.1.2.497
+FileVersion=1.1.5.681
 FileDescription=WR80 Assembler for Windows CLI
 InternalName=
 LegalCopyright=
 LegalTrademarks=
 OriginalFilename=
 ProductName=
-ProductVersion=1.1.2.497
+ProductVersion=1.1.5.681
 AutoIncBuildNr=1
 SyncProduct=1
 
@@ -92,6 +92,16 @@ BuildCmd=
 
 [Unit5]
 FileName=src\wr80data.h
+CompileCpp=0
+Folder=
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit6]
+FileName=src\memdebug.h
 CompileCpp=0
 Folder=
 Compile=1

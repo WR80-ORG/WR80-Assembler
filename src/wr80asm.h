@@ -390,38 +390,7 @@ void proc_macro(){
 				argc = strtol(token, &endptr, 10);
 				if (*endptr != '\0') {
 					argc = 0;
-					/*
-					// TODO: Identificar parâmetros nomeados
-					int total = 0;
-					int len = strlen(token);
-					while(token != NULL){
-						int new_size = total + len + 1;
-						params = realloc(params, new_size);
-						params[total] = '\0';
-						strcat(params, token);
-    					total = strlen(params);
-						token = strtok(NULL, " ");
-					}
-					len = strlen(params);
-    				if(len > 0 && params[len-1] == '\n') 
-						params[len-1] = '\0';
-    				char *ptoken = strtok(params, ",");
-    				while(ptoken != NULL) {
-						char *param = ptoken;
-        				char **tmp = realloc(pnames, (argc + 1) * sizeof(char*));
-        				pnames = tmp;
-        				pnames[argc] = malloc(strlen(param) + 1);
-        				strcpy(pnames[argc], param);
-        				argc++;
-        				ptoken = strtok(NULL, ",");
-					}
-					*/
 					pnames = parse_parameters(&argc); // LEAK: Fluxo
-					
-					printf("argc = %d\n", argc);
-				    for (int i = 0; i < argc; i++)
-				        printf("pnames[%d] = '%s'\n", i, pnames[i]);
-		        
 				}else{
 					pnames = NULL;
 				}
@@ -582,6 +551,7 @@ char* replace(char* token, const char* old_substr, const char* new_substr){
 }
 */
 
+/*
 char* replace(const char* token, const char* old_substr, const char* new_substr) {
     static char* buffer = NULL;
     static size_t buffer_capacity = 0;
@@ -597,7 +567,7 @@ char* replace(const char* token, const char* old_substr, const char* new_substr)
 
     // Realocar APENAS se o buffer for pequeno
     if (buffer_capacity < new_size) {
-        free(buffer); // evita vazamento
+        if(buffer) free(buffer); // evita vazamento
         buffer = (char*)malloc(new_size);
         if (!buffer) {
             buffer_capacity = 0;
@@ -615,6 +585,67 @@ char* replace(const char* token, const char* old_substr, const char* new_substr)
 
     return buffer;
 }
+*/
+
+char* replace(const char* token, const char* old_substr, const char* new_substr) {
+    static char* buffer = NULL;
+    static size_t buffer_capacity = 0;
+
+    // Se token aponta para dentro do buffer estático, precisamos copiá-lo
+    // para um local temporário antes de potencialmente free() o buffer.
+    char *local_copy = NULL;
+    const char *src = token;
+    if (buffer != NULL && token >= buffer && token < buffer + buffer_capacity) {
+        local_copy = strdup(token);   // cria cópia independente do token
+        if (!local_copy) return (char*)token; // falha em alocar: fallback
+        src = local_copy;
+    }
+
+    char* pos = strstr(src, old_substr);
+    if (!pos) {
+        if (local_copy) free(local_copy);
+        return (char*)token;
+    }
+
+    int old_len = (int)strlen(old_substr);
+    int new_len = (int)strlen(new_substr);
+    int original_len = (int)strlen(src);
+
+    int new_size = original_len + (new_len - old_len) + 1; // +1 para '\0'
+
+    // Realocar APENAS se o buffer for pequeno
+    if (buffer_capacity < new_size) {
+        if (buffer) {
+            free(buffer); // agora seguro: src já é cópia se apontava para buffer
+            buffer = NULL;
+            buffer_capacity = 0;
+        }
+        buffer = (char*)malloc(new_size);
+        if (!buffer) {
+            // cleanup da cópia temporária se existia
+            if (local_copy) { free(local_copy); local_copy = NULL; }
+            buffer_capacity = 0;
+            return (char*)token;
+        }
+        buffer_capacity = new_size;
+    }
+
+    int prefix_len = (int)(pos - src); // pos aponta dentro de src (não em token, se copiamos)
+
+    memcpy(buffer, src, prefix_len);
+    memcpy(buffer + prefix_len, new_substr, new_len);
+    strcpy(buffer + prefix_len + new_len, src + prefix_len + old_len);
+    buffer[new_size - 1] = '\0';
+
+    // liberamos a cópia temporária porque já copiamos tudo para buffer
+    if (local_copy) {
+        free(local_copy);
+        local_copy = NULL;
+    }
+
+    return buffer;
+}
+
 
 // -----------------------------------------------------------------------------
 
@@ -919,49 +950,8 @@ bool calc_label(unsigned char *label){
 			printerr("Unknown mnemonic");
 			return false;
 		}else{
-			/*
-			token = strtok(NULL, " ");
 			int argc = 0;
-			int total = 0;
-			int len = 0;
-			char* args = NULL;
-			char** pvalues = NULL;
-			if(token != NULL){
-				args = malloc(1), args[0] = '\0';
-				while(token != NULL){
-					len = strlen(token);
-					int new_size = total + len + 1;
-					args = realloc(args, new_size);
-					args[total] = '\0';
-					strcat(args, token);
-	    			total = strlen(args);
-					token = strtok(NULL, " ");
-				}
-				
-				if(args != NULL) len = strlen(args);
-	    		if(len > 0 && args[len-1] == '\n') 
-					args[len-1] = '\0';
-	    		char *ptoken = strtok(args, ",");
-	    		while(ptoken != NULL) {
-					char *param = ptoken;
-	        		//char **tmp = realloc(pvalues, (argc + 1) * sizeof(char*));
-	        		//pvalues = tmp;
-	        		pvalues = realloc(pvalues, (argc + 1) * sizeof(char*));
-	        		pvalues[argc] = malloc(strlen(param) + 1);
-	        		strcpy(pvalues[argc], param);
-	        		argc++;
-	        		ptoken = strtok(NULL, ",");
-				}	
-			}
-			*/
-			int argc = 0;
-			// Agora extrai os parâmetros restantes
 		    char **pvalues = parse_parameters(&argc); // LEAK: Fluxo
-		
-		    // Exibe
-		   	printf("argc = %d\n", argc);
-		    for (int i = 0; i < argc; i++)
-		        printf("pvalues[%d] = '%s'\n", i, pvalues[i]);
 
 			MacroList* macroArg = insertargs(macro_list, macro->name, argc, pvalues); // LEAK: Fluxo
 		    
