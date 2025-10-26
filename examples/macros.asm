@@ -1,10 +1,10 @@
 macro _mov num1, num2
-	stl #2
-	ld #1
+	stl #num2
+	ld #num1
 endm
 
 macro _mov 1
-	std #1::0
+	std #1::8
 	ld r0
 endm
 

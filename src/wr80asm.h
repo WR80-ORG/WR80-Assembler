@@ -517,14 +517,6 @@ void proc_macro(){
 	macro_list = insertmac(macro_list, argc, name, pnames, code, linen);	// LEAK: Fluxo
 	if(name != NULL) free(name);
 	if(code != NULL) free(code);
-	//free_vector(pnames, argc);
-	/*
-	if(pnames != NULL){
-		for (int i = 0; argc; i++)
-			free(pnames[i]);
-		free(pnames);
-	}
-	*/
 }
 // -----------------------------------------------------------------------------
 
@@ -892,7 +884,8 @@ char** parse_parameters(int *argc_out) {
             free(pvalues);
             return NULL;
         }
-        strcpy(pvalues[*argc_out], token);
+        //strcpy(pvalues[*argc_out], token);
+        memcpy(pvalues[*argc_out], token, len + 1); // copia incluindo '\0'
         (*argc_out)++;
 
         // Próximo token separado por vírgula
@@ -971,15 +964,6 @@ bool calc_label(unsigned char *label){
 		        printf("pvalues[%d] = '%s'\n", i, pvalues[i]);
 
 			MacroList* macroArg = insertargs(macro_list, macro->name, argc, pvalues); // LEAK: Fluxo
-			
-			// Libera memória
-			/*
-		    if(pvalues != NULL){
-		    	for (int i = 0; argc; i++)
-		        	free(pvalues[i]);
-		    	free(pvalues);
-			}
-			*/
 		    
 			if(macroArg != NULL){
 				//showmac(macro_list);
@@ -1819,8 +1803,9 @@ void close_lists(){
 		freedcb(dcb_list);
 	if(label_list != NULL)
 		freelab(label_list);
-	if(macro_list != NULL)
-		freemac(macro_list);
+	if(macro_list != NULL){
+		free_macrolist(macro_list);
+	}
 }
 // -----------------------------------------------------------------------------
 
