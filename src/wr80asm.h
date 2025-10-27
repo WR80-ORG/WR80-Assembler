@@ -299,10 +299,8 @@ void proc_define(){
 	}
 		
 	bool finish = false;
-	if(value[0] == '#'){
-		printerr("Invalid defined value - remove '#'");
-		directive_error = true;
-	}else if(value[0] == '$'){
+	
+	if(value[0] == '$'){
 		strtol(&value[1], &endptr, 16);
 		if (*endptr != '\0') {
 			printerr("Invalid defined value - hexa error");
@@ -337,7 +335,15 @@ void proc_include(){
 		return;
 	}
 
+	printf("token : %s\n", token);
+	int result = get_arg(token);
+	if(!result){
+		return;
+	}else if(result != -1){
+		token = strtok(token, "\"");	
+	}
 	strncpy(file_name, token, sizeof(file_name) - 1);
+	printf("filename : %s\n", file_name);
 
 	int linetemp = linenum;
 	char* filetemp = currentfile;
@@ -877,6 +883,10 @@ char** parse_parameters(int *argc_out) {
 		
 		token[strcspn(token, " ")] = '\0';
 		
+		int result = get_arg(token);
+		if(!result)
+			return NULL;
+			
         // Remove espaços e \n no final
         size_t len = strlen(token);
         while (len > 0 && (token[len - 1] == ' ' || token[len - 1] == '\n' || token[len - 1] == '\r'))
