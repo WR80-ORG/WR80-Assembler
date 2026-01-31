@@ -35,6 +35,7 @@ void proc_rep(void);
 void proc_if(void);
 void proc_export(void);
 void proc_import(void);
+void proc_endx(void);
 void (*func_ptr)();
 
 void printerr(const char*);
@@ -124,6 +125,8 @@ bool isInclude = false;
 bool isIncB = false;
 bool isExport = false;
 bool isImport = false;
+bool isEndx = false;
+bool isExportCurr = false;
 bool isRepeat = false;
 bool isHigh = false;
 bool isDecimal = false;
@@ -151,7 +154,11 @@ bool elsestate = false;
 bool hasif = false;
 bool macroret = false;
 
-int wll_table_alloc = 0;
+int wll_table_alloc = 4;
+int wll_counter = 0;
+int wll_str_pointer = 4;
+int wll_index = 0;
+char** label_pointer = NULL;
 // -----------------------------------------------------
 
 // List structures for the preprocessor
@@ -168,7 +175,7 @@ int macro_depth = 0;
 
 // WR80's Assembly Mnemonics Vector
 // -----------------------------------------------------
-#define MNEMONICS_SIZE 	61
+#define MNEMONICS_SIZE 	62
 const char* mnemonics[] = {
 	// Logical Instructions
 	"AND",
@@ -255,7 +262,8 @@ const char* mnemonics[] = {
 	"IF",
 	"ELSE",
 	"INCLUDEB",
-	"EXPORT"
+	"EXPORT",
+	"ENDX"
 };
 // -----------------------------------------------------
 
@@ -325,19 +333,20 @@ const unsigned short addressing[] = {
 
 // Preprocessor basic directives
 // -----------------------------------------------------
-#define DIRECTIVES_SIZE 	4
+#define DIRECTIVES_SIZE 	5
 const char* directives[] = {
 	"DEFINE",
 	"INCLUDE",
 	"MACRO",
-	"IMPORT"
+	"IMPORT",
+	"EXPORT"
 };
 // -----------------------------------------------------
 
 // Preprocessor Execution vector for directives
 // -----------------------------------------------------
 int* process[] = {
-	(int*)proc_define, (int*)proc_include, (int*)proc_macro, (int*)proc_import
+	(int*)proc_define, (int*)proc_include, (int*)proc_macro, (int*)proc_import, (int*)proc_export
 };
 
 // -----------------------------------------------------

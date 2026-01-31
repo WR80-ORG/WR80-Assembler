@@ -478,12 +478,17 @@ void proc_includeb(){
 // -----------------------------------------------------------------------------
 void proc_export(){
 	token = strtok(NULL, " ");
-	printf("export: %s\n", token);
 	
-	if (token == NULL) {
+	if(token != NULL){
+		int size_str = strlen(token) + 1;
+		wll_table_alloc += size_str + 6;
+		wll_str_pointer += 6;
+		wll_counter++;
+		label_pointer = (char**) realloc(label_pointer, wll_counter * sizeof(char*));
+		label_pointer[wll_counter - 1] = strdup(token);
+	}else{
 		fprintf(stderr, "Error: empty label name for export\n");
 		directive_error = true;
-		return;
 	}
 }
 // -----------------------------------------------------------------------------
@@ -505,6 +510,14 @@ void proc_import(){
 			printf("import: %s\n", token);
 		token = strtok(NULL, "\"");
 	}
+}
+// -----------------------------------------------------------------------------
+
+// proc_endx: Finish export command
+// -----------------------------------------------------------------------------
+void proc_endx(){
+	wll_str_pointer += strlen(label_pointer[wll_index]) + 1;
+	wll_index++;
 }
 // -----------------------------------------------------------------------------
 
@@ -1342,10 +1355,10 @@ bool get_label(int length){
 				printerr("Invalid label name - incorrect char");
 				return false;
 			}
-							
+						
 			label[pos] = '\0';
 			strtol(label, &endptr, 10);
-							
+			
 			if(*endptr == '\0' || (label[0] >= 0x30 && label[0] <= 0x39)){
 				printerr("Invalid label name - Incorrect format");
 				return false;
@@ -1360,7 +1373,6 @@ bool get_label(int length){
 					return false;
 				}
 			}
-			
 			
 			DefineList* def = getdef(define_list, label);
 			if(def == NULL){
@@ -1485,7 +1497,15 @@ bool calc_label(unsigned char *label){
 			freeref(list->refs);
 			list->refs = NULL;
 		}
-
+		
+		if(isExport){
+			if(strcmp(label_pointer[wll_index], label) == 0){
+				code_address[4 + 6 * wll_index] = (wll_str_pointer & 0xFF);
+				code_address[4 + 6 * wll_index + 1] = (wll_str_pointer & 0xFF00) >> 8;
+				strcpy(&code_address[wll_str_pointer], label_pointer[wll_index]);
+			}
+		}
+		
 		toIgnore = true;
 		return toIgnore;
 	}else{
@@ -1640,7 +1660,7 @@ bool tokenizer(){
 			isMnemonic = true;
 			mnemonic = token;
 			
-			toIgnore = strcmp(token, "DEFINE") == 0 || strcmp(token, "ENDX") == 0 || toIgnore;
+			toIgnore = strcmp(token, "DEFINE") == 0 || toIgnore;
 			toIgnore = skip_block(block[MACRO_I].begin, block[MACRO_I].end) || toIgnore;
 			toIgnore = skip_block(block[IMP_I].begin, block[IMP_I].end) || toIgnore;
 
@@ -1658,9 +1678,11 @@ bool tokenizer(){
 			isIF = mnemonic_index == 57;
 			isELSE = mnemonic_index == 58;
 			isIncB = mnemonic_index == 59;
-			isExport = mnemonic_index == 60;
+			isExportCurr = mnemonic_index == 60;
+			isEndx = mnemonic_index == 61;
+			isExport = (!isEndx) ? isExportCurr || isExport : false;
 			isAllocator = mnemonic_index == 50 || mnemonic_index == 51 || mnemonic_index == 52 || mnemonic_index == 53;
-			if(isAllocator || isInclude || isIncB || isIF || isELSE || isExport){
+			if(isAllocator || isInclude || isIncB || isIF || isELSE || isExportCurr){
 				break;
 			}
 				
@@ -1681,7 +1703,7 @@ bool parser(){
 		proc_dcb();
 		return true;
 	}
-	if(isInclude || isIF || isELSE || isMacro || isIncB || isExport){
+	if(isInclude || isIF || isELSE || isMacro || isIncB || isExportCurr || isEndx){
 		return true;
 	}
 	
@@ -1826,10 +1848,13 @@ bool generator(){
 		proc_includeb();
 		return !directive_error;
 	}
-	if(isExport){
-		proc_export();
+	
+	if(isExportCurr) return true;
+	if(isEndx){
+		proc_endx();
 		return !directive_error;
 	}
+	
 	if(isMacro){
 		isMacro = !isMacro;
 		
@@ -2078,12 +2103,7 @@ bool preprocess_file(char *filename, bool verbose){
 		
 		bool isAlloc = strcmp(token, "DB") == 0 || strcmp(token, "DW") == 0 || strcmp(token, "DCB") == 0 || strcmp(token, ".BYTE") == 0;
 		
-		bool isExp = strcmp(token, "EXPORT") == 0;
-		if(isExp){
-			token = strtok(NULL, " ");
-			wll_table_alloc += strlen(token) + 1 + 4;
-		}
-		bool isIncludeB = strcmp(token, "INCLUDEB") == 0 || isExp || strcmp(token, "ENDX") == 0;
+		bool isIncludeB = strcmp(token, "INCLUDEB") == 0 || strcmp(token, "ENDX") == 0;
 		if(isAlloc || isIncludeB){
 			linenum++;
 			continue;	
@@ -2099,6 +2119,7 @@ bool preprocess_file(char *filename, bool verbose){
 		directive_error = false;
 		isDirective = false;
 		isMnemonic = false;
+		
 		if(get_directive() == -1){	// LEAK: Fluxo
 			if(get_mnemonic() == -1){
 				label = token;
@@ -2113,7 +2134,7 @@ bool preprocess_file(char *filename, bool verbose){
 		token = NULL;
 		linenum++;
 	}
-		
+
 	fclose(file);
 	return true;
 }
@@ -2132,7 +2153,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		if(!isValid) return false;	
 	}
 	//showmac(macro_list);
-
+	
 	if(memory == NULL){
 		memory = (unsigned char *) malloc(MEMORY_EMULATOR * sizeof(unsigned char));
 		if (memory == NULL) {
@@ -2140,9 +2161,18 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 	        return 0;
 	    }
     	code_address = memory;
-    	code_index += wll_table_alloc;
-    	memset(&code_address[0], 0, wll_table_alloc);
-    	wll_table_alloc = 0;
+    	if(wll_table_alloc > 4){
+    		code_index += wll_table_alloc;
+    	    memset(&code_address[0], 0, wll_table_alloc);
+    	    code_address[0] = 'W'; code_address[1] = 'L'; code_address[2] = 'L';
+    	    code_address[3] = (char) wll_counter;
+    	    wll_table_alloc = 4;
+			if(verbose){
+	    	    printf("\nExport Symbol Table: \n");
+	    	    for(int i = 0; i < wll_counter; i++)
+	    	    	printf("Symbol %d : '%s'\n", i, label_pointer[i]);				
+			}
+		}
 	}
 	
     linenum = 1;
@@ -2269,7 +2299,13 @@ bool preprocess_buffer(const char *buffer, bool verbose){
 		bool isExp = strcmp(token, "EXPORT") == 0;
 		if(isExp){
 			token = strtok(NULL, " ");
-			wll_table_alloc += strlen(token) + 1 + 4;
+			if(token != NULL){
+				wll_table_alloc += strlen(token) + 1 + 6;
+			    wll_counter++;	
+			}else{
+				directive_error = true;
+				return !directive_error;	
+			}
 		}
 		bool isIncludeB = strcmp(token, "INCLUDEB") == 0 || isExp || strcmp(token, "ENDX") == 0;
 		if(isAlloc || isIncludeB){
@@ -2327,9 +2363,18 @@ bool assemble_buffer(const char *buffer, unsigned char **compiled, bool verbose)
 	        return 0;
 	    }
     	code_address = memory;
-    	code_index += wll_table_alloc;
-    	memset(&code_address[0], 0, wll_table_alloc);
-    	wll_table_alloc = 0;
+    	if(wll_table_alloc > 4){
+    	    code_index += wll_table_alloc;
+    	    memset(&code_address[0], 0, wll_table_alloc);
+    	    code_address[0] = 'W'; code_address[1] = 'L'; code_address[2] = 'L';
+    	    code_address[3] = (char) wll_counter;
+    	    wll_table_alloc = 4;
+			if(verbose){
+	    	    printf("\nExport Symbol Table: \n");
+	    	    for(int i = 0; i < wll_counter; i++)
+	    	    	printf("Symbol %d : '%s'\n", i, label_pointer[i]);				
+			}
+		}
 	}
 	
 	const char *bufptr = buffer;
@@ -2448,8 +2493,8 @@ void reset_states(){
 	isAllocator = false;
 	isInclude = false;
 	isIncB = false;
-	isExport = false;
 	isImport = false;
+	isExportCurr = false;
 	isOrg = false;
 	isHigh = false;
 	syntax_GAS = false;
