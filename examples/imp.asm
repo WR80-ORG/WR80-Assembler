@@ -1,7 +1,7 @@
-import "string.wll", "math.wll", "stdio.wll"
-
+import "code.wll"
+	A
+	C
 endx
 
-import "kernel.wll"
-
-endx
+call A
+call C

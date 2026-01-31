@@ -1,22 +1,21 @@
-
-
-export Abelha
-Abelha:
-	std 2
-	st 3
+export A
+A:
+	and r1
+	and r2
+	or r3
 	ret
 endx
 
-export Botao
-Botao:
-	std 4
-	st 5
+export B
+B:
+	and r3
+	and r4
+	std 0x02
 	ret
 endx
 
-export Caligrafia
-Caligrafia:
+export C
+C:
 	std 4
-	st 5
 	ret
 endx

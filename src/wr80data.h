@@ -54,6 +54,7 @@ bool skip_block(const char*, const char*);
 bool skip_block_buffer(const char*, const char*, const char**);
 char* get_code_buffer(const char*, const char*, const char**);
 int getArgIndex(const char*);
+bool create_label(char*, int);
 // -----------------------------------------------------------------------------
 
 #define MAX_LINE_LENGTH 1024		// MAX LENGTH OF THE LINES
@@ -158,6 +159,7 @@ int wll_table_alloc = 4;
 int wll_counter = 0;
 int wll_str_pointer = 4;
 int wll_index = 0;
+int wll_code_start = 0;
 char** label_pointer = NULL;
 // -----------------------------------------------------
 
@@ -175,7 +177,7 @@ int macro_depth = 0;
 
 // WR80's Assembly Mnemonics Vector
 // -----------------------------------------------------
-#define MNEMONICS_SIZE 	62
+#define MNEMONICS_SIZE 	63
 const char* mnemonics[] = {
 	// Logical Instructions
 	"AND",
@@ -263,7 +265,8 @@ const char* mnemonics[] = {
 	"ELSE",
 	"INCLUDEB",
 	"EXPORT",
-	"ENDX"
+	"ENDX",
+	"IMPORT"
 };
 // -----------------------------------------------------
 
@@ -327,7 +330,7 @@ const unsigned short addressing[] = {
 	REG, REG, REG, IMM2, 					// New instructions MUL, DIV, STL, STD
 	IMP, IMP, IMP,							// New instructions INCR, DECR, IDC
 	IMP, IMP, IMP, IMP, AB, AB, AB, AB, IMP, // Some addictionals commands
-	IMP, IMP, IMP
+	IMP, IMP, IMP, IMP
 };
 // -----------------------------------------------------
 
@@ -338,7 +341,6 @@ const char* directives[] = {
 	"DEFINE",
 	"INCLUDE",
 	"MACRO",
-	"IMPORT",
 	"EXPORT"
 };
 // -----------------------------------------------------
@@ -346,7 +348,7 @@ const char* directives[] = {
 // Preprocessor Execution vector for directives
 // -----------------------------------------------------
 int* process[] = {
-	(int*)proc_define, (int*)proc_include, (int*)proc_macro, (int*)proc_import, (int*)proc_export
+	(int*)proc_define, (int*)proc_include, (int*)proc_macro, (int*)proc_export
 };
 
 // -----------------------------------------------------
