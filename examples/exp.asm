@@ -1,21 +1,20 @@
 export A
 A:
-	and r1
-	and r2
-	or r3
-	ret
+	db 01
+	db 01
+	db 01
 endx
 
 export B
 B:
-	and r3
-	and r4
-	std 0x02
-	ret
+	db 02
+	db 02
+	db 02
 endx
 
 export C
 C:
-	std 4
-	ret
+	db 03
+	db 03
+	db 03
 endx

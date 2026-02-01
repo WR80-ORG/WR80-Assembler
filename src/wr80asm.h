@@ -530,8 +530,13 @@ void proc_import(){
 	long size = 0;
 	int files_counter = 0;
 	int symbols_counter = 0;
+	int symbol_count = 0;
 	char** imported_files = NULL;
 	char** imported_symbols = NULL;
+	char** symbol_as_label = NULL;
+	char** file_data = NULL;
+	bool* symbols_found = NULL;
+	bool is_as_command = false;
 	int linetmp = linenum;
 	
 	while(token != NULL){
@@ -540,52 +545,104 @@ void proc_import(){
 		token = strtok(NULL, "\" ,\t\r\n");
 		printf("file: '%s'\n", imported_files[files_counter - 1]);
 	}
-	
+	file_data = (char**) malloc(files_counter * sizeof(char*));
+	for(int i = 0; i < files_counter; i++)
+		file_data[i] = NULL;
+		
 	char* import_data = get_code(block[IMP_I].begin, block[IMP_I].end);
 	linenum = linetmp;
 	
 	token = strtok(import_data, " ,\t\r\n");
 	while(token != NULL){
-		imported_symbols = (char**) realloc(imported_symbols, ++symbols_counter * sizeof(char*));
-		imported_symbols[symbols_counter - 1] = strdup(token);
+		if(strcmp(token, "AS") == 0){
+			token = strtok(NULL, " ,\t\r\n");
+			is_as_command = true;
+			continue;		
+		}
+		
+		if (!is_as_command){
+			imported_symbols = (char**) realloc(imported_symbols, ++symbols_counter * sizeof(char*));
+			symbol_as_label = (char**) realloc(symbol_as_label, symbols_counter * sizeof(char*));
+			imported_symbols[symbols_counter - 1] = strdup(token);
+			symbol_as_label[symbols_counter - 1] = NULL;
+			printf("symbol: '%s'\n", imported_symbols[symbols_counter-1]);
+		}else{
+			symbol_as_label[symbols_counter - 1] = strdup(token);
+			is_as_command = false;
+		}
+		
 		token = strtok(NULL, " ,\t\r\n");
-		printf("symbol: '%s'\n", imported_symbols[symbols_counter-1]);
 	}
-	
-	for(int i = 0; i < files_counter; i++){
-		char* file_data = load_file_to_buffer(imported_files[i], &size);
-		if(file_data[0] == 'W' && file_data[1] == 'L' && file_data[2] == 'L'){
-			int funcs_count = file_data[3];
-			for(int j = 0; j < symbols_counter; j++){
-				bool func_found = false;
+	symbols_found = (bool*) malloc(symbols_counter * sizeof(bool));
+	for(int i = 0; i < symbols_counter; i++)
+		symbols_found[i] = false;
+		
+	for(int j = 0; j < symbols_counter; j++){
+		bool next_file = false;
+		for(int i = 0; i < files_counter; i++){
+			bool func_found = false;
+			
+			if(!file_data[i])
+				file_data[i] = load_file_to_buffer(imported_files[i], &size);
+				
+			if(file_data[i][0] == 'W' && file_data[i][1] == 'L' && file_data[i][2] == 'L'){
+				int funcs_count = file_data[i][3];
 				for(int w = 0; w < funcs_count; w++){
 					int index = 4 + 6 * w;
-					int str_addr = (file_data[index + 1] << 8) | file_data[index];
-					if(strcmp(&file_data[str_addr], imported_symbols[j]) == 0){
+					int str_addr = (file_data[i][index + 1] << 8) | file_data[i][index];
+					if(strcmp(&file_data[i][str_addr], imported_symbols[j]) == 0){
+
+						for(int x = 0; x < symbols_counter; x++){
+							if(symbols_found[x] && !next_file){
+								if(strcmp(imported_symbols[j], imported_symbols[x]) == 0){
+									next_file = true;
+									break;
+								}
+							}else{
+								symbols_found[j] = true;
+								next_file = false;
+								break;
+							}	
+						}
+						
+						if(next_file) break;
 						func_found = true;
-						if(!create_label(imported_symbols[j], code_index)){
+						
+						if(!create_label((!symbol_as_label[j]) ? imported_symbols[j] : symbol_as_label[j], code_index)){
 							directive_error = true;
 							return;
 						}
-						int code_addr = (file_data[index + 3] << 8) | file_data[index + 2];
-						int code_size = (file_data[index + 5] << 8) | file_data[index + 4];
-						memcpy(&code_address[code_index], &file_data[code_addr], code_size);
+						int code_addr = (file_data[i][index + 3] << 8) | file_data[i][index + 2];
+						int code_size = (file_data[i][index + 5] << 8) | file_data[i][index + 4];
+						memcpy(&code_address[code_index], &file_data[i][code_addr], code_size);
 						code_index += code_size;
 						break;
-					}
-				}
-				if(!func_found){
+					} // if function found
+					
+				} // funcs end
+				
+				if(next_file)
+					continue;
+				
+			}else{
+				printf("Error: Invalid WLL File - No Signature.");
+				directive_error = true;
+				return;
+			} // if signature valid
+			
+			if(func_found){
+				break;
+			}else{
+				if(i == files_counter - 1){
 					printf("Error: Symbol '%s' not found in '%s' file", imported_symbols[j], imported_files[i]);
 					directive_error = true;
 					return;
 				}
 			}
-		}else{
-			printf("Error: Invalid WLL File - No Signature.");
-			directive_error = true;
-			return;
-		}
-	}
+			
+		} // files end
+	} // symbols end
+	
 	showlab(label_list);
 	linenum += 2;
 }
