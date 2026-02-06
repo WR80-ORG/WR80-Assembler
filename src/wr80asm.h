@@ -36,6 +36,7 @@
 
 #include "wr80list.h"	// WR80 list Structures for labels, defines and DBs
 #include "wr80data.h"	// WR80 Variables, Structs and Data for Assembler
+#include "astlib.h"		// WR80 AST Library for math expression evaluations
 // -----------------------------------------------------------------------------
 
 
@@ -321,13 +322,12 @@ void proc_define(){
 					break;
 			case 2:	value = strdup(token);
 					break;
+				
 			default: {
-				if(token != NULL && token[0] != ';'){
-					printerr("Invalid defined token");
-					directive_error = true;
+				if(token != NULL){
+					value = (char*) realloc(value, (strlen(value) + strlen(token) + 1) * sizeof(char));
+					strcat(value, token);
 				}
-				token = NULL;
-				break;
 			}
 		}
 		if(directive_error)
@@ -379,15 +379,19 @@ void proc_define(){
 		
 	bool finish = false;
 	
+	AST *tree = parse(value);
+	sprintf(value, "%d", eval(tree));
+	int number = 0;
+	
 	if(value[0] != '#'){
 		if(value[0] == '$'){
-		strtol(&value[1], &endptr, 16);
-		if (*endptr != '\0') {
-			printerr("Invalid defined value - hexa error");
-			directive_error = true;
-		}
+			strtol(&value[1], &endptr, 16);
+			if (*endptr != '\0') {
+				printerr("Invalid defined value - hexa error");
+				directive_error = true;
+			}
 		}else{
-			if(!recursive_def(value)) {
+			if(!recursive_def(value, &number)) {
 				define_list = insertdef(define_list, linenum, name, NULL, value);
 				finish = true;
 			}
@@ -1000,19 +1004,19 @@ bool dcb_process(){
 
 // recursive_def: definitions recursive reading fetching value defined
 // -----------------------------------------------------------------------------
-bool recursive_def(char* value){
+bool recursive_def(char* value, int* num){
 	int base = (value[0] != '$' && (value[0] != '0' && value[1] != 'X') && (value[0] != 'H' && value[1] != '\'')) ? 10 : 16;
-	int index = (base == 16 && value[0] == '$') ? (base >> 4) : 2;
+	int index = (base == 16 && value[0] == '$') ? (base >> 4) : 0;
 	index = (base == 10) ? 0 : index;
 	if(value[strlen(value) - 1] == '\'')
 		value[strlen(value) - 1] = '\0';
-	strtol(&value[index], &endptr, base);
+	*num = strtol(&value[index], &endptr, base);
 	if (*endptr != '\0') {
 		DefineList* definition = getdef(define_list, value);
 		if(definition == NULL)
 			return false;
 		strcpy(value, definition->value);
-		return recursive_def(value);
+		return recursive_def(value, num);
 	}
 	return true;	
 }
