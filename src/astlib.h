@@ -7,6 +7,9 @@
 #ifndef _INC_STDLIB
 #include <stdlib.h>
 #endif
+#ifndef _STDBOOL_H
+#include <stdbool.h>
+#endif
 
 const char *input;
 
@@ -40,11 +43,11 @@ AST *new_num(int value) {
     return n;
 }
 
-AST *new_ident(const char *name) {
+AST *new_ident(char *name) {
     AST *n = malloc(sizeof(AST));
     n->type = NODE_IDENT;
     n->value = 0;
-    n->ident = strdup(name); // você pode trocar isso se quiser controlar memória
+    n->ident = name;
     n->left = n->right = NULL;
     return n;
 }
@@ -176,21 +179,39 @@ AST *parse(const char *str) {
 }
 
 
-int eval(AST *node) {
+int eval(AST *node, bool* state) {
     switch (node->type) {
         case NODE_NUM: return node->value;
-        case NODE_ADD: return eval(node->left) + eval(node->right);
-        case NODE_SUB: return eval(node->left) - eval(node->right);
-        case NODE_MUL: return eval(node->left) * eval(node->right);
-        case NODE_DIV: return eval(node->left) / eval(node->right);
+        case NODE_ADD: return eval(node->left, state) + eval(node->right, state);
+        case NODE_SUB: return eval(node->left, state) - eval(node->right, state);
+        case NODE_MUL: return eval(node->left, state) * eval(node->right, state);
+        case NODE_DIV: return eval(node->left, state) / eval(node->right, state);
         case NODE_IDENT: {
         	int number = 0;
-    		if(!recursive_def(node->ident, &number))
-    			printf("EVAL warning: Label or macro not defined in expression, it returned zero!\n");
+        	#ifdef __WR80ASM_H__
+    			*state = recursive_def(node->ident, &number);
+    		#else
+    			*state = false;
+    		#endif
 			return number;
 		}
     }
     return 0;
+}
+
+
+void free_ast(AST *node) {
+    if (node == NULL)
+        return;
+
+    free_ast(node->left);
+    free_ast(node->right);
+
+    if (node->type == NODE_IDENT && node->ident != NULL) {
+        free(node->ident);
+    }
+
+    free(node);
 }
 
 #endif

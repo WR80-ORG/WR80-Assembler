@@ -88,6 +88,17 @@ bool create_label(char* label, int addr){
 	return true;
 }
 
+bool calc(const char* formula, int* result){
+	bool state = true;
+	
+	AST *tree = parse(formula);
+	*result = eval(tree, &state);
+	
+	free_ast(tree);
+	
+	return state;
+}
+
 // FUNCTIONS TO FORMAT LINE AND OPERANDS
 // -----------------------------------------------------------------------------
 // format_line: This function convert tab in spaces, lowercase to uppercase and
@@ -379,9 +390,8 @@ void proc_define(){
 		
 	bool finish = false;
 	
-	AST *tree = parse(value);
-	sprintf(value, "%d", eval(tree));
-	int number = 0;
+	//AST *tree = parse(value);
+	//sprintf(value, "%d", eval(tree));
 	
 	if(value[0] != '#'){
 		if(value[0] == '$'){
@@ -391,9 +401,21 @@ void proc_define(){
 				directive_error = true;
 			}
 		}else{
+			/*
 			if(!recursive_def(value, &number)) {
 				define_list = insertdef(define_list, linenum, name, NULL, value);
 				finish = true;
+			}
+			*/
+			int number = 0;
+			if(!calc(value, &number)) {
+				define_list = insertdef(define_list, linenum, name, NULL, value);
+				finish = true;
+			}else{
+				char result[10] = {0};
+				sprintf(result, "%d", number);
+				free(value);
+				value = strdup(result);
 			}
 		}
 	}
@@ -1122,10 +1144,15 @@ int replace_name(char* name){
 			value = definition->value;
 		}else{
 			value = definition->refs;
+			int number = 0;
+			if(!calc(value, &number)){
+				printerr("undefined value");
+				return -1;
+			}
+			sprintf(value, "%d", number);
 			token = replace(token, name, value);
 			strtol(token, &endptr, 10);
 			return (*endptr != '\0') ? replace_name(value) : 1;
-			//return replace_name(value);
 		}
 	}
 	token = replace(token, name, value);

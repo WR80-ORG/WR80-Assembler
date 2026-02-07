@@ -1,6 +1,5 @@
-define value 2
-define formula value + 1
-define result formula * 2 - (value - 1)
+define result num1 * num2 - 1
+define num1 8
+define num2 2
  
-db formula
 std result 
