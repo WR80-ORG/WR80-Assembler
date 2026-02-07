@@ -88,8 +88,9 @@ bool create_label(char* label, int addr){
 	return true;
 }
 
-bool calc(const char* formula, int* result){
+bool calc(const char* formula, int* result, bool step){
 	bool state = true;
+	is_asm_proc = step;
 	
 	AST *tree = parse(formula);
 	*result = eval(tree, &state);
@@ -408,7 +409,7 @@ void proc_define(){
 			}
 			*/
 			int number = 0;
-			if(!calc(value, &number)) {
+			if(!calc(value, &number, false)) {
 				define_list = insertdef(define_list, linenum, name, NULL, value);
 				finish = true;
 			}else{
@@ -1026,6 +1027,7 @@ bool dcb_process(){
 
 // recursive_def: definitions recursive reading fetching value defined
 // -----------------------------------------------------------------------------
+/*
 bool recursive_def(char* value, int* num){
 	int base = (value[0] != '$' && (value[0] != '0' && value[1] != 'X') && (value[0] != 'H' && value[1] != '\'')) ? 10 : 16;
 	int index = (base == 16 && value[0] == '$') ? (base >> 4) : 0;
@@ -1037,11 +1039,60 @@ bool recursive_def(char* value, int* num){
 		DefineList* definition = getdef(define_list, value);
 		if(definition == NULL)
 			return false;
-		strcpy(value, definition->value);
+			
+		if (definition->refs[0] == 0){
+			//value = realloc(value, strlen(definition->value) + 1);
+			//free(value);
+			value = strdup(definition->value);
+			//strcpy(value, definition->value);
+		}else{
+			//free(value);
+			value = strdup(definition->refs);
+			//value = strdup(definition->refs);
+			//strcpy(value, definition->refs);
+			return false;
+		}
 		return recursive_def(value, num);
 	}
 	return true;	
+}*/
+
+bool recursive_def(char **value, int *num) {
+    char *str = *value;
+    char *endptr;
+
+    int base = (str[0] != '$' &&
+               (str[0] != '0' || str[1] != 'X') &&
+               (str[0] != 'H' || str[1] != '\'')) ? 10 : 16;
+
+    int index = (base == 16 && str[0] == '$') ? 1 : 0;
+
+    int len = strlen(str);
+    if (len > 0 && str[len - 1] == '\'')
+        str[len - 1] = '\0';
+
+    *num = strtol(&str[index], &endptr, base);
+
+    if (*endptr == '\0')
+        return true;
+
+    DefineList* definition = getdef(define_list, str);
+    if (definition == NULL)
+        return false;
+
+    free(*value);
+
+    if (definition->refs[0] == 0) {
+        *value = strdup(definition->value);
+    } else {
+        *value = strdup(definition->refs);
+        return false;
+    }
+
+    return recursive_def(value, num);
 }
+
+
 // -----------------------------------------------------------------------------
 
 char* replace(const char* token, const char* old_substr, const char* new_substr) {
@@ -1108,9 +1159,9 @@ char* replace(const char* token, const char* old_substr, const char* new_substr)
 
 // replace_name: replace de defined name to the value
 // -----------------------------------------------------------------------------
+/*
 int replace_name(char* name){
 	char* value;
-	char str[8];
 	
 	DefineList* definition = getdef(define_list, name);
 	
@@ -1128,12 +1179,13 @@ int replace_name(char* name){
 			if(label->addr == 0xFFFF){
 				int addr_index = code_index + dcb_index;
 				label->refs = insertaddr(label->refs, addr_index, isRel, isIMM, isHigh, isDW);
-				//curr_refer = label->refs;
 			}
 			curr_refer = label->refs;
 			
-			sprintf(str, "%d", label->addr);
-			value = str;
+			char value_buf[32];
+			sprintf(value_buf, "%d", label->addr);
+			token = replace(token, name, value_buf);
+    		return 1;
 				
 		}else{
 			printerr("undefined value");
@@ -1145,19 +1197,81 @@ int replace_name(char* name){
 		}else{
 			value = definition->refs;
 			int number = 0;
-			if(!calc(value, &number)){
+			
+			if(!calc(value, &number, true)){
 				printerr("undefined value");
 				return -1;
 			}
-			sprintf(value, "%d", number);
-			token = replace(token, name, value);
+			
+			char value_buf[32];
+			sprintf(value_buf, "%d", number);
+			
+			token = replace(token, name, value_buf);
 			strtol(token, &endptr, 10);
-			return (*endptr != '\0') ? replace_name(value) : 1;
+			return (*endptr != '\0') ? replace_name(value_buf) : 1;
 		}
 	}
-	token = replace(token, name, value);
-	return 1;	
 }
+*/
+
+int replace_name(char* name){
+    char *value = NULL;
+    char value_buf[32];
+    DefineList* definition = getdef(define_list, name);
+    
+    if(definition == NULL){
+        LabelList* label = getLabelByName(label_list, name);
+        
+        if(label != NULL){
+            bool isRel = (addressing[mnemonic_index] & REL) == REL;
+            bool isIMM = isAllocator;
+            bool isDW  = mnemonic_index == 53;
+
+            if(isRel)
+                isRelative = true;
+            else
+                isLabel = true;
+                
+            if(label->addr == 0xFFFF){
+                int addr_index = code_index + dcb_index;
+                label->refs = insertaddr(label->refs, addr_index, isRel, isIMM, isHigh, isDW);
+            }
+            
+            curr_refer = label->refs;
+
+            sprintf(value_buf, "%d", label->addr);
+            value = value_buf;
+        }
+        else{
+            printerr("undefined value");
+            return -1;    
+        }
+    }
+    else{
+        if (definition->refs[0] == 0){
+            value = definition->value;
+        }else{
+            int number = 0;
+
+            if(!calc(definition->refs, &number, true)){
+                printerr("undefined value");
+                return -1;
+            }
+
+            sprintf(value_buf, "%d", number);
+            value = value_buf;
+
+            token = replace(token, name, value);
+
+            strtol(token, &endptr, 10);
+            return (*endptr != '\0') ? replace_name(value) : 1;
+        }
+    }
+
+    token = replace(token, name, value);
+    return 1;
+}
+
 // -----------------------------------------------------------------------------
 
 int getParamIndex(const char* param){
@@ -2334,7 +2448,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		isValid = preprocess_file(filename, verbose);	// lEAK: Fluxo
 		if(!isValid) return false;	
 	}
-	//showmac(macro_list);
+	showdef(define_list);
 	
 	if(memory == NULL){
 		memory = (unsigned char *) malloc(MEMORY_EMULATOR * sizeof(unsigned char));

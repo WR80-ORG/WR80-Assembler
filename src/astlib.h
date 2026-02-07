@@ -12,6 +12,7 @@
 #endif
 
 const char *input;
+bool is_asm_proc = false;
 
 typedef enum {
     NODE_NUM,
@@ -189,7 +190,12 @@ int eval(AST *node, bool* state) {
         case NODE_IDENT: {
         	int number = 0;
         	#ifdef __WR80ASM_H__
-    			*state = recursive_def(node->ident, &number);
+        		char* formula = strdup(node->ident);
+    			*state = recursive_def(&formula, &number);
+    			if(*state == false && is_asm_proc){
+    				*state = calc(formula, &number, is_asm_proc);
+				}
+				free(formula);
     		#else
     			*state = false;
     		#endif
