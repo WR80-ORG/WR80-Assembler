@@ -1243,8 +1243,18 @@ int replace_name(char* name){
             value = value_buf;
         }
         else{
-            printerr("undefined value");
-            return -1;    
+        	int number = 0;
+        	
+            if(!calc(name, &number, true)){
+                printerr("undefined value");
+                return -1;
+            }
+            sprintf(value_buf, "%d", number);
+            value = value_buf;
+
+            token = replace(token, name, value);
+            strtol(token, &endptr, 10);
+            return (*endptr != '\0') ? replace_name(value) : 1;
         }
     }
     else{
@@ -1889,6 +1899,7 @@ bool tokenizer(){
     		token = strtok(NULL, " ");
     		continue;
 		}
+		
     	if(count_tok >= 2){
     		format_operand();
         	count_tok++;
@@ -2017,8 +2028,8 @@ bool parser(){
 // -----------------------------------------------------------------------------
 bool parse_addressing(int index){
 		char op[50] = {0};
-		int operand_len = strlen(operand);	// UNADDRESSABLE ACCESS: Raiz
 		
+		int operand_len = strlen(operand);	// UNADDRESSABLE ACCESS: Raiz
 		bool isBitGetter = false;
 		int count = 0;
 		int op_int = (reg_index == -1) ? 0 : reg_index;
@@ -2035,6 +2046,16 @@ bool parse_addressing(int index){
 			
 			memcpy(dest, op, count+1);
 			int base = (isHexadecimal) ? 16 : 10;
+			
+			int result = 0;
+
+	        if(!calc(dest, &result, true)){
+	            printerr("undefined value");
+	        	return false;
+	        }
+	
+	        sprintf(dest, "%d", result);
+    	
 			number = strtol(dest, &endptr, base);
 			if (*endptr != '\0') {
 				printerr("Cannot parse the hexa or decimal number");
@@ -2448,7 +2469,7 @@ bool assemble_file(char *filename, unsigned char **compiled, bool verbose) {
 		isValid = preprocess_file(filename, verbose);	// lEAK: Fluxo
 		if(!isValid) return false;	
 	}
-	showdef(define_list);
+	//showdef(define_list);
 	
 	if(memory == NULL){
 		memory = (unsigned char *) malloc(MEMORY_EMULATOR * sizeof(unsigned char));
