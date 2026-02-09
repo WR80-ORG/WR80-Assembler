@@ -396,13 +396,13 @@ void proc_define(){
 	bool finish = false;
 	
 	if(value[0] != '#'){
-		if(value[0] == '$'){
-			strtol(&value[1], &endptr, 16);
-			if (*endptr != '\0') {
-				printerr("Invalid defined value - hexa error");
-				directive_error = true;
-			}
-		}else{
+		//if(value[0] == '$'){
+		//	strtol(&value[1], &endptr, 16);
+		//	if (*endptr != '\0') {
+		//		printerr("Invalid defined value - hexa error");
+		//		directive_error = true;
+		//	}
+		//}else{
 			int number_res = 0;
 			if(!calc(value, &number_res, false)) {
 				define_list = insertdef(define_list, linenum, name, NULL, value);
@@ -413,7 +413,7 @@ void proc_define(){
 				free(value);
 				value = strdup(result);
 			}
-		}
+		//}
 	}
 	if(directive_error || finish){
 		free(name);

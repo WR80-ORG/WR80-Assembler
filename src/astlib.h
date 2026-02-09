@@ -37,10 +37,9 @@ typedef enum {
     NODE_SHT_LEFT,
     NODE_SHT_RIGHT,
     NODE_AND_BIT,
-    NODE_POS,
-    NODE_NEG,
     NODE_NOT_BIT,
-    NODE_NOT
+    NODE_NOT,
+    NODE_EXP
 } NodeType;
 
 typedef struct AST {
@@ -89,7 +88,7 @@ AST *new_op(NodeType type, AST *l, AST *r) {
 
 
 void skip_spaces() {
-    while (*input == ' ')
+    while (*input == ' ' || *input == '\t')
         input++;
 }
 
@@ -101,6 +100,10 @@ int is_alpha(char c) {
 
 int is_alnum(char c) {
     return is_alpha(c) || (c >= '0' && c <= '9');
+}
+
+int is_hexa(const char* c){
+	return ((c[0] == 'H' || c[0] == 'h') && c[1] == '\'');
 }
 
 
@@ -116,36 +119,54 @@ int parse_number() {
 */
 
 int parse_number() {
-    char *end;
+	const char* start = NULL;
+    char *end = NULL;
+    char buffer[64];
+    
+    int value = 0;
     int base = 10;
-
+	int len = strcspn(input, "H");
+	
     // $FF
     if (*input == '$') {
         input++;
+        start = input;
         base = 16;
+        value = strtol(start, &end, base);
+        input = end;
     }
     // 0xFF
     else if (input[0] == '0' && (input[1] == 'x' || input[1] == 'X')) {
         input += 2;
+        start = input;
         base = 16;
+        value = strtol(start, &end, base);
+        input = end;
     }
     // H'FF'
     else if ((input[0] == 'H' || input[0] == 'h') && input[1] == '\'') {
         input += 2;
         base = 16;
-        int value = strtol(input, &end, 16);
-        input = (*end == '\'') ? end + 1 : end;
-        return value;
+        len = strcspn(input, "'");
+        memcpy(buffer, input, len);
+        buffer[len] = '\0';
+        start = buffer;
+        input += len + 1;
+        value = strtol(start, &end, base);
     }
-
-    int value = strtol(input, &end, base);
-
-    // Sufixo Ah
-    if (*end == 'h' || *end == 'H') {
-        value = strtol(input, &end, 16);
-    }
-
-    input = end;
+    // FFh
+	else if(*(input + len) == 'H'){
+    	base = 16;
+    	memcpy(buffer, input, len);
+    	buffer[len] = '\0';
+    	start = buffer;
+    	input += len + 1;
+    	value = strtol(start, &end, base);
+	}else{
+		value = strtol(input, &end, base);
+		input = end;
+	}
+	
     return value;
 }
 
@@ -179,7 +200,7 @@ AST *parse_primary() {
     }
 
     // identificador
-    if (is_alpha(*input)) {
+    if (is_alpha(*input) && !is_hexa(input)) {
         char *name = parse_ident();
         return new_ident(name);
     }
@@ -189,44 +210,36 @@ AST *parse_primary() {
     return new_num(value);
 }
 
-AST *parse_unary(){
-	AST *node;
-	
-    while (1) {
-        skip_spaces();
+AST *parse_unary() {
+    skip_spaces();
 
-        if (*input == '+') {
-        	is_expression = true;
-            input++;
-            node = new_op(NODE_POS, NULL, parse_unary());
-        } else if (*input == '-') {
-        	is_expression = true;
-            input++;
-            node = new_op(NODE_NEG, NULL, parse_unary());
-        } else if (*input == '~') {
-        	is_expression = true;
-            input++;
-            node = new_op(NODE_NOT_BIT, NULL, parse_unary());
-        } else if (*input == '!') {
-        	is_expression = true;
-            input++;
-            node = new_op(NODE_NOT, NULL, parse_unary());
-        } else {
-        	node = parse_primary();
-            break;
-        }
+    if (*input == '~') {
+        is_expression = true;
+        input++;
+        return new_op(NODE_NOT_BIT, NULL, parse_unary());
     }
-	
-	return node;
+
+    if (*input == '!' && *(input+1) != '=') {
+        is_expression = true;
+        input++;
+        return new_op(NODE_NOT, NULL, parse_unary());
+    }
+
+    return parse_primary();
 }
+
 
 AST *parse_mul() {
     AST *node = parse_unary();
 
     while (1) {
         skip_spaces();
-
-        if (*input == '*') {
+		
+		if (*input == '*' && *(input+1) == '*'){
+			is_expression = true;
+			input += 2;
+			node = new_op(NODE_EXP, node, parse_unary());
+		} else if (*input == '*') {
         	is_expression = true;
             input++;
             node = new_op(NODE_MUL, node, parse_unary());
@@ -238,15 +251,15 @@ AST *parse_mul() {
         	is_expression = true;
             input++;
             node = new_op(NODE_MOD, node, parse_unary());
-        } else if (*input == '<' && *input+1 == '<') {
+        } else if (*input == '<' && *(input+1) == '<') {
         	is_expression = true;
             input += 2;
             node = new_op(NODE_SHT_LEFT, node, parse_unary());
-        } else if (*input == '>' && *input+1 == '>') {
+        } else if (*input == '>' && *(input+1) == '>') {
         	is_expression = true;
             input += 2;
             node = new_op(NODE_SHT_RIGHT, node, parse_unary());
-        } else if (*input == '&') {
+        } else if (*input == '&' && *(input+1) != '&') {
         	is_expression = true;
             input++;
             node = new_op(NODE_AND_BIT, node, parse_unary());
@@ -274,7 +287,7 @@ AST *parse_add() {
         	is_expression = true;
             input++;
             node = new_op(NODE_SUB, node, parse_mul());
-        } else if (*input == '|') {
+        } else if (*input == '|' && *(input+1) != '|') {
         	is_expression = true;
             input++;
             node = new_op(NODE_OR_BIT, node, parse_mul());
@@ -296,14 +309,22 @@ AST *parse_relational(){
 	while(1){
 		skip_spaces();
 		
-		if (*input == '=' && *input+1 == '=') {
+		if (*input == '=' && *(input+1) == '=') {
 			is_expression = true;
 			input += 2;
 			node = new_op(NODE_EQUAL, node, parse_add());
-		} else if(*input == '!' && *input+1 == '=') {
+		} else if(*input == '!' && *(input+1) == '=') {
 			is_expression = true;
 			input += 2;
 			node = new_op(NODE_DIFF, node, parse_add());
+		} else if(*input == '<' && *(input+1) == '=') {
+			is_expression = true;
+			input += 2;
+			node = new_op(NODE_LESS_EQ, node, parse_add());
+		} else if(*input == '>' && *(input+1) == '=') {
+			is_expression = true;
+			input += 2;
+			node = new_op(NODE_GREAT_EQ, node, parse_add());
 		} else if(*input == '<') {
 			is_expression = true;
 			input++;
@@ -312,14 +333,6 @@ AST *parse_relational(){
 			is_expression = true;
 			input++;
 			node = new_op(NODE_GREAT, node, parse_add());
-		} else if(*input == '<' && *input+1 == '=') {
-			is_expression = true;
-			input += 2;
-			node = new_op(NODE_LESS_EQ, node, parse_add());
-		} else if(*input == '>' && *input+1 == '=') {
-			is_expression = true;
-			input += 2;
-			node = new_op(NODE_GREAT_EQ, node, parse_add());
 		} else {
 			break;
 		}
@@ -334,7 +347,7 @@ AST *parse_logical_and(){
 	while(1){
 		skip_spaces();
 		
-		if (*input == '&' && *input+1 == '&') {
+		if (*input == '&' && *(input+1) == '&') {
 			is_expression = true;
 			input += 2;
 			node = new_op(NODE_AND, node, parse_relational());
@@ -352,7 +365,7 @@ AST *parse_logical_or(){
 	while(1){
 		skip_spaces();
 	
-		if (*input == '|' && *input+1 == '|') {
+		if (*input == '|' && *(input+1) == '|') {
 			is_expression = true;
 			input += 2;
 			node = new_op(NODE_OR, node, parse_logical_and());
@@ -394,10 +407,9 @@ int eval(AST *node, bool* state) {
         case NODE_SHT_LEFT:  return eval(node->left, state) << eval(node->right, state);
         case NODE_SHT_RIGHT: return eval(node->left, state) >> eval(node->right, state);
         case NODE_AND_BIT: 	 return eval(node->left, state) & eval(node->right, state);
-        case NODE_POS: 		 return +eval(node->right, state);
-        case NODE_NEG: 		 return -eval(node->right, state);
         case NODE_NOT_BIT: 	 return ~eval(node->right, state);
         case NODE_NOT: 		 return !eval(node->right, state);
+        case NODE_EXP: 		 return (int)pow(eval(node->left, state), eval(node->right, state));
         case NODE_IDENT: {
         	int number_res = 0;
         	#ifdef __WR80ASM_H__
