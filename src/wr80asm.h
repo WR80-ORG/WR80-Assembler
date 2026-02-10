@@ -227,8 +227,21 @@ void proc_rep(){
 // proc_dcb: Allocate data byte or data word
 // -----------------------------------------------------------------------------
 void proc_dcb(){
-	token = strtok(NULL, "\n");
+	token = strtok(NULL, " ");
+	char* concat = strdup(token);
+	
+	while(token != NULL){
+		token = strtok(NULL, " ");
+		if(token != NULL){
+			concat = (char*) realloc(concat, (strlen(concat) + strlen(token) + 1) * sizeof(char));
+			strcat(concat, token);
+		}	
+	}
+	token = concat;
 	operand = token;
+	
+	int comm_index = strcspn(token, ";");
+	token[comm_index] = '\0';
 	
 	int i = 0;
 	int length = 0;
@@ -265,7 +278,7 @@ void proc_dcb(){
 			name[namelen] = 0;
 			
 			dcb_index = length;
-			
+		
 			int argstate = get_arg(name);
 			if(argstate != -1)
 				if(!argstate) return; else continue;
@@ -341,9 +354,23 @@ void proc_define(){
 				
 			default: {
 				if(token != NULL){
-					value = (char*) realloc(value, (strlen(value) + strlen(token) + 1) * sizeof(char));
-					strcat(value, token);
+					int comm_index = strcspn(token, ";");
+					
+					if(token[comm_index] != ';'){
+						value = (char*) realloc(value, (strlen(value) + strlen(token) + 1) * sizeof(char));
+						strcat(value, token);
+					}else{
+						if(comm_index == 0)
+							token = NULL;
+						else{
+							token[comm_index] = '\0';
+							value = (char*) realloc(value, (strlen(value) + strlen(token) + 1) * sizeof(char));
+							strcat(value, token);
+							token = NULL;
+						}	
+					}
 				}
+				
 			}
 		}
 		if(directive_error)
@@ -404,6 +431,7 @@ void proc_define(){
 		//	}
 		//}else{
 			int number_res = 0;
+
 			if(!calc(value, &number_res, false)) {
 				define_list = insertdef(define_list, linenum, name, NULL, value);
 				finish = true;
@@ -712,6 +740,9 @@ void proc_macro(){
 	int argc = 0;
 	
 	while(token != NULL){
+		//int comm_index = strcspn(token, ";");
+		//token[comm_index] = '\0';
+		
 		switch(pos){
 			case 1:{
 				token = strtok(NULL, " ");
@@ -1924,6 +1955,9 @@ bool get_operand(){
 	}
 	
 	token = operand;
+	int comm_index = strcspn(token, ";");
+	token[comm_index] = '\0';
+	
 	return true;
 }
 
