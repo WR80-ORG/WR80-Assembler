@@ -8,4 +8,4 @@ addr_start:
 addr_end:
 
 addr_size:	
-	dw .size ; 8 bytes
+	dw "Hello", .size ** 3 ; Test of string with expression exponential

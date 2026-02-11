@@ -14,7 +14,6 @@
 const char *input;
 const char *input_save;
 bool is_asm_proc = false;
-bool is_expression = false;
 
 typedef enum {
     NODE_NUM,
@@ -95,7 +94,7 @@ void skip_spaces() {
 int is_alpha(char c) {
     return (c >= 'A' && c <= 'Z') ||
            (c >= 'a' && c <= 'z') ||
-            c == '_';
+            c == '_' || c == '.';
 }
 
 int is_alnum(char c) {
@@ -106,17 +105,6 @@ int is_hexa(const char* c){
 	return ((c[0] == 'H' || c[0] == 'h') && c[1] == '\'');
 }
 
-
-/*
-int parse_number() {
-    int value = 0;
-    while (*input >= '0' && *input <= '9') {
-        value = value * 10 + (*input - '0');
-        input++;
-    }
-    return value;
-}
-*/
 
 int parse_number() {
 	const char* start = NULL;
@@ -191,7 +179,6 @@ AST *parse_primary() {
 
     // parênteses
     if (*input == '(') {
-    	is_expression = true;
         input++; // '('
         AST *node = parse_logical_or();
         skip_spaces();
@@ -214,13 +201,11 @@ AST *parse_unary() {
     skip_spaces();
 
     if (*input == '~') {
-        is_expression = true;
         input++;
         return new_op(NODE_NOT_BIT, NULL, parse_unary());
     }
 
     if (*input == '!' && *(input+1) != '=') {
-        is_expression = true;
         input++;
         return new_op(NODE_NOT, NULL, parse_unary());
     }
@@ -236,31 +221,24 @@ AST *parse_mul() {
         skip_spaces();
 		
 		if (*input == '*' && *(input+1) == '*'){
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_EXP, node, parse_unary());
 		} else if (*input == '*') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_MUL, node, parse_unary());
         } else if (*input == '/') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_DIV, node, parse_unary());
         } else if (*input == '%') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_MOD, node, parse_unary());
         } else if (*input == '<' && *(input+1) == '<') {
-        	is_expression = true;
             input += 2;
             node = new_op(NODE_SHT_LEFT, node, parse_unary());
         } else if (*input == '>' && *(input+1) == '>') {
-        	is_expression = true;
             input += 2;
             node = new_op(NODE_SHT_RIGHT, node, parse_unary());
         } else if (*input == '&' && *(input+1) != '&') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_AND_BIT, node, parse_unary());
         } else {
@@ -280,19 +258,15 @@ AST *parse_add() {
         skip_spaces();
 
         if (*input == '+') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_ADD, node, parse_mul());
         } else if (*input == '-') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_SUB, node, parse_mul());
         } else if (*input == '|' && *(input+1) != '|') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_OR_BIT, node, parse_mul());
         } else if (*input == '^') {
-        	is_expression = true;
             input++;
             node = new_op(NODE_XOR_BIT, node, parse_mul());
         } else {
@@ -310,27 +284,21 @@ AST *parse_relational(){
 		skip_spaces();
 		
 		if (*input == '=' && *(input+1) == '=') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_EQUAL, node, parse_add());
 		} else if(*input == '!' && *(input+1) == '=') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_DIFF, node, parse_add());
 		} else if(*input == '<' && *(input+1) == '=') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_LESS_EQ, node, parse_add());
 		} else if(*input == '>' && *(input+1) == '=') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_GREAT_EQ, node, parse_add());
 		} else if(*input == '<') {
-			is_expression = true;
 			input++;
 			node = new_op(NODE_LESS, node, parse_add());
 		} else if(*input == '>') {
-			is_expression = true;
 			input++;
 			node = new_op(NODE_GREAT, node, parse_add());
 		} else {
@@ -348,7 +316,6 @@ AST *parse_logical_and(){
 		skip_spaces();
 		
 		if (*input == '&' && *(input+1) == '&') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_AND, node, parse_relational());
 		} else {
@@ -366,7 +333,6 @@ AST *parse_logical_or(){
 		skip_spaces();
 	
 		if (*input == '|' && *(input+1) == '|') {
-			is_expression = true;
 			input += 2;
 			node = new_op(NODE_OR, node, parse_logical_and());
 		} else {
@@ -379,7 +345,6 @@ AST *parse_logical_or(){
 
 
 AST *parse(const char *str) {
-	is_expression = false;
     input = str;
     input_save = str;
     return parse_logical_or();
@@ -417,7 +382,7 @@ int eval(AST *node, bool* state) {
         		char* original_formula = strdup(input_save);
         		
     			*state = recursive_def(&formula, &number_res);
-    			if(*state == false && is_asm_proc && is_expression){
+    			if(*state == false && is_asm_proc){
     				*state = calc(formula, &number_res, is_asm_proc);
 				}
 				

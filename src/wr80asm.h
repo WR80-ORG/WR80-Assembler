@@ -226,26 +226,17 @@ void proc_rep(){
 
 // proc_dcb: Allocate data byte or data word
 // -----------------------------------------------------------------------------
+/*
 void proc_dcb(){
 	token = strtok(NULL, " ");
-	char* concat = strdup(token);
-	
-	while(token != NULL){
-		token = strtok(NULL, " ");
-		if(token != NULL){
-			concat = (char*) realloc(concat, (strlen(concat) + strlen(token) + 1) * sizeof(char));
-			strcat(concat, token);
-		}	
-	}
-	token = concat;
 	operand = token;
 	
 	int comm_index = strcspn(token, ";");
 	token[comm_index] = '\0';
+	operand[comm_index] = '\0';
 	
 	int i = 0;
 	int length = 0;
-	//char* value = malloc(1); //malloc(strlen(token) + 1);
 	char value[1024] = {0};
 	bool isHexa = false;
 	bool isHexa2 = false;
@@ -292,6 +283,7 @@ void proc_dcb(){
 				return;	
 			}
 		}
+		
 		if(isHexa || isNum){
 			char val[10] = {0};
 			int j = 0;
@@ -332,6 +324,115 @@ void proc_dcb(){
 	dcb_list = insertdcb(dcb_list, linenum, length, value);
 	//free(value);
 }
+*/
+
+
+void proc_dcb()
+{
+    token = strtok(NULL, "");
+    if (!token) return;
+
+    operand = token;
+
+    /* Remove comentário */
+    int comm = strcspn(token, ";");
+    token[comm] = '\0';
+
+    char value[1024] = {0};
+    int length = 0;
+
+    bool isDW = (mnemonic_index == 53);
+
+    char *item = strtok(token, ",");
+
+    while (item)
+    {
+        /* Trim espaços */
+        while (*item == ' ' || *item == '\t') item++;
+
+        char *end = item + strlen(item) - 1;
+        while (end > item && (*end == ' ' || *end == '\t')) {
+            *end-- = '\0';
+        }
+
+        if (*item == '\0') {
+            item = strtok(NULL, ",");
+            continue;
+        }
+
+        /* --------- Caso: STRING --------- */
+        if (*item == '"')
+        {
+            item++; /* pula " */
+
+            while (*item && *item != '"') {
+                value[length++] = *item++;
+            }
+
+            item = strtok(NULL, ",");
+            continue;
+        }
+
+        /* --------- Caso: Expressão --------- */
+
+        bool isLowByte  = false;
+        bool isHighByte = false;
+
+        if (*item == '<') {
+            isLowByte = true;
+            item++;
+        }
+        else if (*item == '>') {
+            isHighByte = true;
+            item++;
+        }
+
+        /* Trim novamente após < ou > */
+        while (*item == ' ' || *item == '\t') item++;
+
+        /* get_arg (mantido conforme pedido) */
+        int argstate = get_arg(item);
+        if (argstate != -1) {
+            if (!argstate) return;
+            item = strtok(NULL, ",");
+            continue;
+        }
+		
+        /* Avaliação da expressão */
+        int result = 0;
+        if (!calc(item, &result, true)) {
+            directive_error = true;
+            printerr("PARSE => undefined value");
+            return;
+        }
+		
+        /* Warning para DB */
+        if (!isDW && !isLowByte && !isHighByte) {
+            if (result > 255 || result < -128)
+                printwarn("DCB byte is larger than 8-bit. Only low byte will be considered");
+        }
+
+        /* Armazenamento */
+        if (isDW)
+        {
+            value[length++] = result & 0xFF;
+            value[length++] = (result >> 8) & 0xFF;
+        }
+        else
+        {
+            if (isHighByte)
+                value[length++] = (result >> 8) & 0xFF;
+            else
+                value[length++] = result & 0xFF;
+        }
+
+        item = strtok(NULL, ",");
+    }
+
+	dcb_index = length;
+    dcb_list = insertdcb(dcb_list, linenum, length, value);
+}
+
 // -----------------------------------------------------------------------------
 
 // proc_define: Store definitions in lists for replacement
@@ -1068,7 +1169,7 @@ bool recursive_def(char **value, int *num) {
         str[len - 1] = '\0';
 
     *num = strtol(&str[index], &endptr, base);
-
+	
     if (*endptr == '\0')
         return true;
 
@@ -1079,7 +1180,7 @@ bool recursive_def(char **value, int *num) {
     	if(!label)
     		return false;
 	}
-        
+		
     free(*value);
 
     if(definition){
